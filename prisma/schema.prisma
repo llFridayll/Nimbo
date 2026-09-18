@@ -2,14 +2,15 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// NOTE: using SQLite for local dev right now since the machine's PostgreSQL
-// service needs a password we don't have. Switch provider back to
-// "postgresql" (and Float fields below back to `Decimal @db.Decimal(12, 2)`)
-// once a real Postgres connection string is available — SQLite has no
-// native Decimal type.
+// Supabase Postgres. DATABASE_URL is the transaction pooler (port 6543,
+// pgbouncer=true) for normal app queries; DIRECT_URL is the session pooler
+// (port 5432) migrate/push need — Supabase's true "direct connection" is
+// IPv6-only and unreachable from this network, but the session pooler
+// behaves like a direct connection for schema changes and IS reachable.
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum Platform {
@@ -77,6 +78,12 @@ model Order {
   /// reaches this app at all, so there's nothing more precise to store.
   buyerRegion      String?
 
+  // Kept as Float (not Decimal) on purpose even though Postgres now supports
+  // it — switching would return a Prisma Decimal object instead of a plain
+  // number everywhere totalAmount is read (17 files do arithmetic/display on
+  // it), a breaking change with real regression risk that's out of scope
+  // for a straight provider migration. Worth doing as its own deliberate
+  // follow-up, not bundled in here.
   totalAmount      Float
   currency         String       @default("THB")
 

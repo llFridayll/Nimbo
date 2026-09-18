@@ -33,9 +33,17 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
-# local SQLite dev database
+# local SQLite dev database + any backup/snapshot copies of it — these
+# contain real customer order data (names, phone numbers) and must never be
+# committed. A prior commit accidentally included one; see git history notes.
 /prisma/dev.db
 /prisma/dev.db-journal
+/prisma/dev.db.*
+/prisma/sqlite-snapshot*.json
+/prisma/migrations_sqlite_archive/
+
+# Generated packing-slip/order exports — real customer data, local-only.
+/exports/
 
 # vercel
 .vercel
