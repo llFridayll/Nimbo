@@ -1,0 +1,319 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// NOTE: using SQLite for local dev right now since the machine's PostgreSQL
+// service needs a password we don't have. Switch provider back to
+// "postgresql" (and Float fields below back to `Decimal @db.Decimal(12, 2)`)
+// once a real Postgres connection string is available — SQLite has no
+// native Decimal type.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  SHOPEE
+  TIKTOK
+  LAZADA
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+enum OrderStatus {
+  NEW
+  PENDING_SHIPMENT
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUND_REQUESTED
+  RETURNED
+  PROBLEM
+}
+
+enum ProblemType {
+  DELAYED_SHIPMENT
+  BUYER_COMPLAINT
+  REFUND_DISPUTE
+  LOST_PACKAGE
+  DAMAGED_ITEM
+  WRONG_ITEM
+  CHARGEBACK
+  OTHER
+}
+
+enum ProblemPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+/// Where a shop-policy warning came from — most come from livestreams or
+/// video content rather than a specific order, unlike ProblemTicket above.
+enum ViolationSource {
+  LIVESTREAM
+  VIDEO_CONTENT
+  PRODUCT_LISTING
+  ACCOUNT
+  OTHER
+}
+
+model Order {
+  id               String       @id @default(cuid())
+  platform         Platform
+  platformOrderId  String
+  status           OrderStatus  @default(NEW)
+
+  buyerName        String?
+  buyerPhone       String?
+  buyerUsername    String?
+  /// District + province only (e.g. "เกาะลันตา, กระบี่") — the one part of
+  /// the shipping address TikTok Shop's API does NOT mask for privacy; the
+  /// street-level address is redacted server-side by TikTok and never
+  /// reaches this app at all, so there's nothing more precise to store.
+  buyerRegion      String?
+
+  totalAmount      Float
+  currency         String       @default("THB")
+
+  orderDate        DateTime
+  shippingCarrier  String?
+  trackingNumber   String?
+  shippingStatus   String?
+  /// Stamped the moment a tracking number first appears on this order (sync
+  /// detecting a change, or a manual import bringing one in already
+  /// assigned) — this is the real-world "label printed" moment, and is what
+  /// the shipping summary buckets orders by (see shippingSummary.ts). Null
+  /// means the order has no tracking number yet and still counts as pending
+  /// for whichever day is "today" until it gets one.
+  printedAt        DateTime?
+
+  /// Which store this order came from, for platforms where one seller
+  /// account can run multiple shops (e.g. several TikTok Shop stores).
+  /// Null for platforms/orders synced before multi-shop support existed.
+  shopId           String?
+  shopName         String?
+
+  /// True when the platform itself reports this order as still awaiting
+  /// payment (TikTok's "UNPAID" order_status, Shopee's "ยังไม่ชำระ", Lazada's
+  /// "unpaid" export status) — these currently all collapse into
+  /// OrderStatus.NEW same as an already-paid-but-unconfirmed order, so this
+  /// is the only signal that distinguishes them. Used to keep unpaid orders
+  /// out of the shipping-summary packing list (see shippingSummary.ts) —
+  /// nothing ships before it's paid for.
+  isUnpaid         Boolean      @default(false)
+
+  rawPayload       Json?
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  items            OrderItem[]
+  statusHistory    OrderStatusHistory[]
+  problem          ProblemTicket?
+
+  @@unique([platform, platformOrderId])
+  @@index([status])
+  @@index([shopId])
+  @@index([orderDate])
+  @@index([buyerPhone])
+}
+
+model OrderItem {
+  id           String   @id @default(cuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  sku          String
+  productName  String
+  quantity     Int
+  unitPrice    Float
+  imageUrl     String?
+
+  @@index([orderId])
+  @@index([sku])
+}
+
+model OrderStatusHistory {
+  id          String      @id @default(cuid())
+  orderId     String
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  status      OrderStatus
+  note        String?
+  occurredAt  DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+
+  @@index([orderId])
+}
+
+model ProblemTicket {
+  id          String          @id @default(cuid())
+  orderId     String          @unique
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  type        ProblemType
+  priority    ProblemPriority @default(MEDIUM)
+  description String
+  isResolved  Boolean         @default(false)
+  resolvedAt  DateTime?
+  assignee    String?
+
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([isResolved])
+  @@index([priority])
+}
+
+/// A platform policy warning/violation not tied to any specific order — e.g.
+/// a livestream or video flagged for breaking TikTok Shop's rules. Kept
+/// separate from ProblemTicket since that model requires an orderId.
+model PolicyViolation {
+  id          String          @id @default(cuid())
+  platform    Platform
+  source      ViolationSource
+  title       String
+  description String
+  priority    ProblemPriority @default(MEDIUM)
+  isResolved  Boolean         @default(false)
+  resolvedAt  DateTime?
+  occurredAt  DateTime        @default(now())
+  evidenceUrl String?
+
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([isResolved])
+  @@index([platform])
+}
+
+model SyncLog {
+  id          String    @id @default(cuid())
+  platform    Platform
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  ordersSynced Int      @default(0)
+  success     Boolean   @default(false)
+  errorMessage String?
+}
+
+/// One TikTok Shop OAuth grant (from one merchant clicking "Authorize").
+/// A single grant's access/refresh token pair can cover multiple shops.
+model TikTokAuthorization {
+  id                   String       @id @default(cuid())
+  accessToken          String
+  accessTokenExpireAt  DateTime
+  refreshToken         String
+  refreshTokenExpireAt DateTime
+  sellerName           String?
+
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  shops                TikTokShop[]
+}
+
+/// One employee login account. Plain per-account username/password, managed
+/// from the in-app admin page rather than a self-serve signup flow — there's
+/// no public registration since every account here maps to an actual staff
+/// member the company already knows about.
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  displayName  String
+  role         UserRole @default(STAFF)
+  isActive     Boolean  @default(true)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  activityLogs ActivityLog[]
+
+  @@index([isActive])
+}
+
+/// One row per action a logged-in user took (login/logout, employee-account
+/// changes, resolving a problem ticket, triggering a manual sync, ...) — an
+/// admin-facing audit trail, not the order-event feed on /problems (that one
+/// tracks what happened to ORDERS, this tracks what PEOPLE did).
+/// `username` is a point-in-time snapshot so the log still reads sensibly
+/// after the account behind `userId` is later deleted (onDelete: SetNull).
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  username  String
+  action    String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+/// A shop authorized under a TikTokAuthorization grant. shopCipher is
+/// required on every TikTok Shop Orders API call alongside the access token.
+model TikTokShop {
+  id              String              @id @default(cuid())
+  shopId          String              @unique
+  shopCipher      String
+  shopName        String?
+  region          String?
+
+  authorizationId String
+  authorization   TikTokAuthorization @relation(fields: [authorizationId], references: [id], onDelete: Cascade)
+
+  /// Set once the one-time full order history backfill finishes for this shop.
+  /// While null, the dashboard offers the backfill button; regular syncs only
+  /// ever pull today's orders regardless of this field.
+  historyBackfilledAt DateTime?
+  historyBackfillStartedAt DateTime?
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+}
+
+/// Generic key/value store for small pieces of runtime config that aren't
+/// worth their own table — e.g. which LINE group the shipping summary gets
+/// pushed to, captured from the LINE webhook rather than hand-typed.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// A manually-ticked "shipped" checkbox on the shipping-summary page, one per
+/// SKU row per carrier per ship date — lets warehouse staff track packing
+/// progress independent of platform status (which lags or never updates for
+/// manually-imported Shopee/Lazada orders). Ticking is a pure UI action with
+/// no effect on Order.status.
+model ShippingChecklistItem {
+  id        String   @id @default(cuid())
+  shipDate  String
+  /// The specific order this tick applies to — two different orders sharing
+  /// a SKU/carrier/shop must never share a checklist row (see
+  /// shippingSummary.ts: order-items are deliberately not merged).
+  orderId   String
+  sku       String
+  checked   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@unique([shipDate, orderId, sku])
+}
+
+/// A platform's raw seller_sku doesn't always match what the shop actually
+/// calls a product internally — lets staff rename how a SKU displays across
+/// the shipping summary (page, LINE messages, Excel export) without touching
+/// the underlying OrderItem.sku or the platform's own data.
+model SkuAlias {
+  id         String   @id @default(cuid())
+  rawSku     String   @unique
+  displaySku String
+  updatedAt  DateTime @updatedAt
+}
