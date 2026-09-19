@@ -105,7 +105,17 @@ export function ExportSummaryButton({ date, compact = false, excludedKeys: exter
           onClose={close}
           footer={
             <>
-              <p className="text-xs text-gray-400 dark:text-gray-500">{excludedKeys.size > 0 ? `ตัดออก ${excludedKeys.size} รายการ` : " "}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                {/* A disabled download with no stated reason reads as a broken
+                    button. This window is legitimately empty until an order in
+                    it gets a tracking number, so say so rather than showing a
+                    blank line next to a greyed-out control. */}
+                {preview && totalRows === 0
+                  ? "ยังไม่มีออเดอร์ที่พิมพ์ใบปะหน้าในรอบนี้ — ลองย้อนไปวันก่อนหน้า"
+                  : excludedKeys.size > 0
+                    ? `ตัดออก ${excludedKeys.size} รายการ`
+                    : " "}
+              </p>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -117,6 +127,8 @@ export function ExportSummaryButton({ date, compact = false, excludedKeys: exter
                 <a
                   href={downloadHref}
                   onClick={close}
+                  aria-disabled={totalRows === 0}
+                  title={totalRows === 0 ? "ไม่มีออเดอร์ให้ดาวน์โหลดในรอบนี้" : undefined}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium text-white ${
                     totalRows === 0 ? "pointer-events-none bg-gray-300 dark:bg-gray-600" : "bg-emerald-600 hover:bg-emerald-700"
                   }`}
@@ -144,7 +156,15 @@ export function ExportSummaryButton({ date, compact = false, excludedKeys: exter
 
 function SlipPreviewTable({ preview, isUpdating }: { preview: SlipPreviewCarrier[]; isUpdating: boolean }) {
   const totalRows = preview.reduce((n, c) => n + c.rows.length, 0);
-  if (totalRows === 0) return <p className="py-10 text-center text-sm text-gray-400 dark:text-gray-500">ไม่มีเนื้อหาจะดาวน์โหลด</p>;
+  if (totalRows === 0)
+    return (
+      <div className="py-10 text-center">
+        <p className="text-sm text-gray-500 dark:text-gray-400">ยังไม่มีออเดอร์ในรอบจัดส่งนี้</p>
+        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+          รอบจะเปลี่ยนทุกวันเวลา 13:00 น. — ถ้าเพิ่งเลยเวลานั้นมา ใบของรอบที่แล้วจะอยู่ที่วันก่อนหน้า
+        </p>
+      </div>
+    );
 
   return (
     <div className={`space-y-4 transition-opacity ${isUpdating ? "opacity-40" : "opacity-100"}`}>
