@@ -20,12 +20,22 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "20mb",
     },
   },
-  // Lets the dev server accept cross-origin requests (RSC/HMR fetches
-  // included) when the app is opened through the ngrok tunnel used to test
-  // the TikTok Shop OAuth callback — without this, client-side navigations
-  // (e.g. picking a filter dropdown) silently fail when accessed via that
-  // host, even though direct/localhost access works fine.
-  allowedDevOrigins: ["scope-track-mobile.ngrok-free.dev"],
+  // Hosts the dev server will accept requests from. Next blocks cross-origin
+  // requests to dev-only assets and endpoints by default and only trusts
+  // `localhost`, so any OTHER host serving the same dev server gets a bare
+  // 403 "Unauthorized" on /_next/* — the page still renders, but HMR and the
+  // client-side fetches behind every button die silently, which looks exactly
+  // like "the button does nothing".
+  //
+  // - the ngrok tunnel: used to test the TikTok Shop OAuth callback.
+  // - the LAN address: staff open this from other machines/phones on the
+  //   office network (e.g. http://192.168.1.120:3000). The wildcard covers
+  //   the whole 192.168.1.x subnet so a DHCP lease change doesn't silently
+  //   break every button again; it is matched segment-by-segment, so
+  //   "192.168.1.*" matches 192.168.1.120 but nothing outside that subnet.
+  //
+  // Dev-only — `next start` does not apply this blocking.
+  allowedDevOrigins: ["scope-track-mobile.ngrok-free.dev", "192.168.1.*"],
   async headers() {
     if (process.env.NODE_ENV === "production") return [];
     // Turbopack's dev-mode static chunks (/_next/static/chunks/...) keep the

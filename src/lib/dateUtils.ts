@@ -69,21 +69,24 @@ export function shippingCutoffWindowForDate(anyDate: Date): ShippingCutoffWindow
   return { shipDate, dow: parts.dow, from, to };
 }
 
-/** The next upcoming ship date's cutoff window as of `now` — today's window
- * if today is Mon-Sat and before its 13:00 cutoff, otherwise the next
- * dispatch day's window (skipping Sunday). */
+/** Today's dispatch window — the batch actually being packed and printed
+ * right now. Rolled forward only on Sunday, which is never a dispatch day.
+ *
+ * This deliberately does NOT jump to the next dispatch day once the 13:00
+ * cutoff passes. It used to, and the effect was that at 13:00 — the exact
+ * moment staff print the packing slip — every default view flipped to
+ * tomorrow's batch, which is empty: the page showed nothing and the Excel
+ * download button went dead (it is disabled when there are no rows), with no
+ * indication that the data had simply moved to the previous day.
+ *
+ * Deliberate trade-off: after 13:00, an order that still has no tracking
+ * number belongs to the NEXT window and so no longer shows here by default —
+ * "วันถัดไป →" reaches it. That is the rarer case; of the last 58 printed
+ * orders, 49 were printed before 13:00, so today's window is what staff need
+ * on screen nearly all of the time. Behaviour before 13:00 is unchanged. */
 export function currentShippingCutoffWindow(now: Date = new Date()): ShippingCutoffWindow {
   const parts = bangkokDateParts(now);
-  const bangkok = new Date(now.getTime() + BANGKOK_OFFSET_MS);
-  const hour = bangkok.getUTCHours() + bangkok.getUTCMinutes() / 60;
-  const pastCutoff = hour >= SHIPPING_CUTOFF_HOUR;
-
-  let target = parts;
-  if (parts.dow === 0) {
-    target = addBangkokDays(parts, 1); // Sunday -> Monday
-  } else if (pastCutoff) {
-    target = addBangkokDays(parts, parts.dow === 6 ? 2 : 1); // Saturday -> Monday, else next day
-  }
+  const target = parts.dow === 0 ? addBangkokDays(parts, 1) : parts; // Sunday -> Monday
   return shippingCutoffWindowForDate(cutoffInstant(target));
 }
 

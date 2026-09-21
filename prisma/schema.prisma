@@ -2,10 +2,16 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Supabase Postgres. DATABASE_URL is the transaction pooler (port 6543,
-// pgbouncer=true) for normal app queries; DIRECT_URL is the session pooler
-// (port 5432) migrate/push need — Supabase's true "direct connection" is
-// IPv6-only and unreachable from this network, but the session pooler
+// Supabase Postgres, session pooler (port 5432) for BOTH urls.
+//
+// DATABASE_URL used to point at the transaction pooler (port 6543,
+// pgbouncer=true); that made every query ~2s instead of ~0.2s. Prisma needs
+// prepared statements and the transaction pooler gives each query a different
+// backend, so 6543 is either slow (with pgbouncer=true) or broken without it
+// — see the measurements in .env.example. Do not move this back to 6543.
+//
+// DIRECT_URL is what migrate/push use — Supabase's true "direct connection"
+// is IPv6-only and unreachable from this network, but the session pooler
 // behaves like a direct connection for schema changes and IS reachable.
 datasource db {
   provider  = "postgresql"
@@ -128,6 +134,14 @@ model Order {
   @@index([shopId])
   @@index([orderDate])
   @@index([buyerPhone])
+  // The shipping summary (shippingSummary.ts) and the dashboard's
+  // "shipped today by channel" donut both bucket orders by printedAt, which
+  // was a sequential scan of the whole table on every page load.
+  @@index([printedAt])
+  // The orders page's shop dropdowns and getChannelStatuses() both filter by
+  // platform alone; the composite also serves the very common
+  // "one channel, recent orders" filter on the orders and sales pages.
+  @@index([platform, orderDate])
 }
 
 model OrderItem {
@@ -207,6 +221,13 @@ model SyncLog {
   ordersSynced Int      @default(0)
   success     Boolean   @default(false)
   errorMessage String?
+
+  // getLastSyncedLabel() runs on EVERY page (it feeds the top bar) as
+  // "latest successful sync", and getChannelStatuses() runs the same query
+  // narrowed to one platform. The scheduler appends rows every 5 minutes, so
+  // this table only grows — without these it was an unindexed scan each time.
+  @@index([success, finishedAt])
+  @@index([platform, success, finishedAt])
 }
 
 /// One TikTok Shop OAuth grant (from one merchant clicking "Authorize").

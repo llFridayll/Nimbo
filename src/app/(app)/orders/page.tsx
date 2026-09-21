@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { OrderStatus, Platform } from "@prisma/client";
-import { listOrders } from "@/lib/orderQueries";
+import { listOrderRows } from "@/lib/orderQueries";
 import { searchOrdersAcrossPlatforms } from "@/lib/orderSearch";
 import { startOfDaysAgoBangkok } from "@/lib/dateUtils";
 import { prisma } from "@/lib/db";
@@ -21,10 +22,15 @@ interface OrdersPageProps {
     from?: string;
     to?: string;
     shopId?: string;
+    page?: string;
   }>;
 }
 
 const DEFAULT_DAYS = "30";
+// 50 keeps a page well under a second even on "ทั้งหมด" (5,700+ orders), and
+// is small enough to scan; the old fixed cap of 100 had no pager at all, so
+// anything past row 100 was simply invisible.
+const PAGE_SIZE = 50;
 
 export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   const params = await searchParams;
@@ -35,6 +41,8 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   const fromParam = params.from ?? "";
   const toParam = params.to ?? "";
   const shopIdParam = params.shopId ?? "";
+  const pageParam = Number(params.page);
+  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
   // An explicit custom date range (picked via the calendar popover) overrides
   // the "days" preset entirely.
   const isCustomRange = Boolean(fromParam || toParam);
@@ -60,10 +68,16 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   }
 
   // Server-side data fetch — runs on every request/navigation, no client fetch() involved.
-  const [orders, tiktokShops, shopeeShops, lazadaShops] = await Promise.all([
+  // The table below renders neither line items nor problem tickets, so this
+  // deliberately fetches only the row columns (see listOrderRows) rather than
+  // the full order graph — that alone took this query from ~2.4s to ~0.2s.
+  const [pageResult, tiktokShops, shopeeShops, lazadaShops] = await Promise.all([
     q
-      ? searchOrdersAcrossPlatforms(q)
-      : listOrders({ status, platform, shopId, fromDate, toDate, pageSize: 100 }).then((r) => r.orders),
+      // Search is a "find this one order" flow capped at 25 matches, so it is
+      // deliberately not paginated — it's shaped like a page only so the
+      // rendering below can treat both modes identically.
+      ? searchOrdersAcrossPlatforms(q).then((orders) => ({ orders, total: orders.length, page: 1, pageSize: orders.length }))
+      : listOrderRows({ status, platform, shopId, fromDate, toDate, page, pageSize: PAGE_SIZE }),
     prisma.tikTokShop.findMany({ select: { shopId: true, shopName: true } }),
     prisma.order.findMany({
       where: { platform: Platform.SHOPEE, shopId: { not: null } },
@@ -76,6 +90,24 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
       distinct: ["shopId"],
     }),
   ]);
+  const { orders, total } = pageResult;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const firstRow = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const lastRow = Math.min(page * PAGE_SIZE, total);
+  // Page links must carry every active filter, or clicking "next" would
+  // silently drop the status/platform/date the user had narrowed to.
+  const pageHref = (n: number) => {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v && k !== "page") sp.set(k, Array.isArray(v) ? v[0] : v);
+    if (n > 1) sp.set("page", String(n));
+    const qs = sp.toString();
+    return qs ? `/orders?${qs}` : "/orders";
+  };
+  // A stale or hand-typed ?page= past the end (a bookmark from before orders
+  // were cancelled, say) would render an empty table under a caption like
+  // "แสดง 49,901–5,715" — send it to the real last page instead. Search mode
+  // is always a single page, so it can never be out of range.
+  if (!q && total > 0 && page > totalPages) redirect(pageHref(totalPages));
   const title = q ? `ผลการค้นหา "${q}"` : "รายการ Order";
 
   // Lets the table header say exactly what window of orders it's showing —
@@ -85,7 +117,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   const rangeLabel = !q
     ? `ข้อมูลตั้งแต่วันที่ ${fromDate ? fromDate.toLocaleDateString("th-TH") : "เริ่มเปิดร้าน"} ถึงวันที่ ${
         toDate ? toDate.toLocaleDateString("th-TH") : "วันนี้"
-      }`
+      } — ทั้งหมด ${total.toLocaleString()} รายการ`
     : null;
 
   return (
@@ -169,6 +201,37 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
               </tbody>
             </table>
           </div>
+        )}
+        {!q && total > 0 && (
+          <nav
+            aria-label="แบ่งหน้า"
+            className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-4 py-3 text-sm dark:border-gray-800"
+          >
+            <p className="text-gray-500 dark:text-gray-400">
+              แสดง {firstRow.toLocaleString()}–{lastRow.toLocaleString()} จาก {total.toLocaleString()} รายการ
+            </p>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                {page > 1 ? (
+                  <Link href={pageHref(page - 1)} className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+                    ← ก่อนหน้า
+                  </Link>
+                ) : (
+                  <span className="rounded-md border border-gray-200 px-3 py-1.5 text-gray-300 dark:border-gray-700 dark:text-gray-600">← ก่อนหน้า</span>
+                )}
+                <span className="px-2 text-gray-500 dark:text-gray-400">
+                  หน้า {page.toLocaleString()} / {totalPages.toLocaleString()}
+                </span>
+                {page < totalPages ? (
+                  <Link href={pageHref(page + 1)} className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+                    ถัดไป →
+                  </Link>
+                ) : (
+                  <span className="rounded-md border border-gray-200 px-3 py-1.5 text-gray-300 dark:border-gray-700 dark:text-gray-600">ถัดไป →</span>
+                )}
+              </div>
+            )}
+          </nav>
         )}
       </form>
     </div>

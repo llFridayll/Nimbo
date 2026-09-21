@@ -56,6 +56,10 @@ export function OrdersFilterBar({
       if (value) params.set(key, value);
       else params.delete(key);
     }
+    // Any filter change starts over at page 1 — narrowing from page 5 of
+    // "ทั้งหมด" to a status with only 30 matches would otherwise land on an
+    // empty page 5 of that smaller result set.
+    params.delete("page");
     router.push(`/orders?${params.toString()}`);
   }
 
