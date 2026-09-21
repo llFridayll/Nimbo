@@ -4,6 +4,12 @@ import { useMemo, useState } from "react";
 import { DailySalesPoint, ProductQuantity } from "@/lib/salesStats";
 
 const CHART_HEIGHT = 260;
+// Narrowest a single bucket (one day/week/month column) may get. Every bucket
+// is flex-1, so a short range still stretches to fill the card with no
+// scrollbar; only once buckets × this exceeds the card (e.g. "ทั้งหมด" at
+// daily granularity is 400+ columns) does the chart grow past it and become
+// horizontally scrollable — inside its own container, see below.
+const MIN_BUCKET_PX = 10;
 const MAX_BARS = 31;
 
 function formatBaht(n: number): string {
@@ -218,10 +224,19 @@ export function SalesChart({ points }: { points: DailySalesPoint[] }) {
                 <span className="absolute bottom-0 text-red-400">-{metric === "revenue" ? formatCompact(max) : max.toLocaleString()}</span>
               </div>
             </div>
-            <div className="relative flex-1">
+            {/* Scrolls horizontally on its own when there are more buckets
+                than fit. Without min-w-0 + overflow-x-auto here, a 400-bucket
+                row overflowed this flex child, widened the document, and put a
+                page-level scrollbar on the whole screen — this keeps the
+                scrollbar on the chart and the y-axis (sibling above) pinned.
+                pb-4 reserves a clear band at the bottom: the scrollbar is
+                drawn along the container's bottom edge, and the x-axis date
+                row is the last child — without the padding, macOS overlay
+                scrollbars paint straight over the dates. */}
+            <div className="relative min-w-0 flex-1 overflow-x-auto pb-4">
               <div
                 className="flex items-stretch gap-1"
-                style={{ height: CHART_HEIGHT }}
+                style={{ height: CHART_HEIGHT, minWidth: buckets.length * MIN_BUCKET_PX }}
                 onMouseLeave={() => setHoverIndex(null)}
               >
                 {buckets.map((b, i) => {
@@ -282,7 +297,10 @@ export function SalesChart({ points }: { points: DailySalesPoint[] }) {
                   );
                 })}
               </div>
-              <div className="mt-1 flex gap-1 text-[10px] text-gray-400 dark:text-gray-500">
+              <div
+                className="mt-1 flex gap-1 text-[10px] text-gray-400 dark:text-gray-500"
+                style={{ minWidth: buckets.length * MIN_BUCKET_PX }}
+              >
                 {buckets.map((b, i) => (
                   <div key={i} className="flex-1 text-center">
                     {i % labelStride === 0 ? b.label : ""}
