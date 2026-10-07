@@ -164,6 +164,18 @@ export function parseCancellationExport(buffer: Buffer): CancellationParseResult
   }
   const reasonHeader = findHeader(foundHeaders, HEADER_CANDIDATES.reason);
   if (!reasonHeader) {
+    // A Shopee order export from a tab that drops the reason column — the
+    // "คืนเงิน/คืนสินค้า/ยกเลิก" tab puts "จัดส่งไม่สำเร็จ" where
+    // "เหตุผลในการยกเลิกคำสั่งซื้อ" would be. Nothing is wrong with the file,
+    // it just isn't the one that carries reasons, so say which one does
+    // instead of dumping 50-odd column names at the person uploading it.
+    if (foundHeaders.includes("สถานะการสั่งซื้อ")) {
+      throw new CancellationParseError(
+        'ไฟล์นี้ไม่มีคอลัมน์เหตุผลการยกเลิก — ไฟล์ที่ export จากแท็บ "คืนเงิน/คืนสินค้า/ยกเลิก" ของ Shopee ไม่ใส่เหตุผลมาให้ ' +
+          'ให้ export จากแท็บ "ยกเลิกแล้ว" แทน (ชื่อไฟล์ Order.cancelled) หรือถ้าต้องการอัปเดตสถานะออเดอร์ ให้อัปไฟล์นี้ที่หน้า "นำเข้าออเดอร์"',
+        [],
+      );
+    }
     throw new CancellationParseError("หาคอลัมน์เหตุผลการยกเลิกในไฟล์นี้ไม่เจอ", foundHeaders);
   }
   const initiatorHeader = findHeader(foundHeaders, HEADER_CANDIDATES.initiator);

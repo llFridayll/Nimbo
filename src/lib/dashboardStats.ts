@@ -1,7 +1,15 @@
 import { cache } from "react";
 import { OrderStatus, Platform } from "@prisma/client";
 import { prisma } from "./db";
-import { startOfDaysAgoBangkok, formatBangkokDateYMD, formatRelativeThai, formatShortThaiDateTime } from "./dateUtils";
+import {
+  currentShippingCutoffWindow,
+  shippingCutoffWindowForDate,
+  startOfDaysAgoBangkok,
+  formatBangkokDateYMD,
+  formatRelativeThai,
+  formatShortThaiDateTime,
+} from "./dateUtils";
+import { NEEDS_SHIPPING_STATUSES, shippingWindowWhere } from "./shippingSummary";
 import { platformLabel, platformHexColor } from "./labels";
 import { maskBuyerName } from "./mask";
 
@@ -31,43 +39,74 @@ function computeKpi(current: number, previous: number): DashboardKpi {
   return { value: current, changePct, direction: changePct > 0 ? "up" : changePct < 0 ? "down" : "flat" };
 }
 
-/** All 5 headline KPIs compare "orders placed today" against "orders placed
- * yesterday" for a consistent visual treatment. Note รอจัดส่ง (pending
- * shipment) is naturally a backlog metric (current outstanding count), not a
- * daily-flow one like the other 4 — it's measured here as "today's
- * newly-placed orders currently pending" rather than the raw backlog total,
- * a deliberate simplification so all 5 cards share the same trend-badge
- * shape (see plan doc). The raw current backlog is still shown elsewhere on
- * the page via getPendingShipmentProducts(). */
-export async function getDashboardKpis(): Promise<DashboardKpis> {
+/** The five headline cards. Two kinds of number live here, and each is
+ * compared against something that makes sense for it:
+ *
+ * - Order flow (ออเดอร์ใหม่, ยกเลิก/คืน, ยอดขาย) — orders PLACED today,
+ *   compared with yesterday up to the same time of day. Comparing "so far
+ *   today" with "all of yesterday" made every card read -100% each morning
+ *   however normal trading was.
+ * - Shipping (จัดส่งแล้ว, รอจัดส่ง) — the same orders the packing list shows,
+ *   not orders placed today. These used to count only orders placed today
+ *   that happened to be in that status, so they sat at 0 almost every day
+ *   while the packing list had work on it.
+ *
+ * ออเดอร์ใหม่ counts every order placed today whatever its status: TikTok
+ * moves an order out of NEW within minutes, so counting status NEW alone
+ * undercounted the day's orders. */
+export async function getDashboardKpis(now: Date = new Date()): Promise<DashboardKpis> {
   const todayStart = startOfDaysAgoBangkok(0);
   const yesterdayStart = startOfDaysAgoBangkok(1);
+  const yesterdaySameTime = new Date(yesterdayStart.getTime() + (now.getTime() - todayStart.getTime()));
 
-  // One round trip, not four. These used to be two groupBy + two aggregate
-  // calls issued in parallel, but "in parallel" still means four separate
-  // queries over a link with a ~205ms round trip, and Prisma wraps each in
-  // its own transaction — measured at 2923ms against the live database
-  // versus 657ms for this single scan. All four read the same rows anyway:
-  // every order since yesterday, split by which day it landed on.
-  const rows = await prisma.$queryRaw<{ isToday: boolean; status: OrderStatus; count: number; revenue: number | null }[]>`
-    SELECT "orderDate" >= ${todayStart} AS "isToday",
-           "status",
-           COUNT(*)::int        AS "count",
-           SUM("totalAmount")   AS "revenue"
-    FROM "Order"
-    WHERE "orderDate" >= ${yesterdayStart}
-    GROUP BY 1, 2
-  `;
+  const window = currentShippingCutoffWindow(now);
+  const previous = shippingCutoffWindowForDate(new Date(window.from.getTime() - 1));
+  const elapsedInWindow = now.getTime() - window.from.getTime();
+  const previousSameTime = new Date(Math.min(previous.from.getTime() + elapsedInWindow, previous.to.getTime()));
 
-  const countOf = (isToday: boolean, statuses: OrderStatus[]) =>
-    rows.filter((r) => r.isToday === isToday && statuses.includes(r.status)).reduce((sum, r) => sum + r.count, 0);
+  // Order flow in one scan, not four: every order since yesterday's start
+  // that is either from today or from yesterday before this time of day.
+  // (Four parallel queries measured 2923ms against the live database, this
+  // single scan 657ms — each is a ~205ms round trip in its own transaction.)
+  const [rows, shippedNow, shippedBefore, backlog] = await Promise.all([
+    prisma.$queryRaw<{ isToday: boolean; status: OrderStatus; count: number; revenue: number | null }[]>`
+      SELECT "orderDate" >= ${todayStart} AS "isToday",
+             "status",
+             COUNT(*)::int        AS "count",
+             SUM("totalAmount")   AS "revenue"
+      FROM "Order"
+      WHERE "orderDate" >= ${todayStart}
+         OR ("orderDate" >= ${yesterdayStart} AND "orderDate" < ${yesterdaySameTime})
+      GROUP BY 1, 2
+    `,
+    // Tracking number arrived in the current shipping window — the
+    // warehouse's "shipped today" (the day the tracking number arrives is
+    // the day it ships). Same filter as the packing list and the donut.
+    prisma.order.count({ where: { AND: [shippingWindowWhere(window, { now }), { printedAt: { not: null } }] } }),
+    prisma.order.count({
+      where: { AND: [shippingWindowWhere(previous, { now }), { printedAt: { gte: previous.from, lt: previousSameTime } }] },
+    }),
+    // Still waiting for a tracking number, from any day. Not tied to the
+    // window on purpose: after 14:00 the packing list moves these to the
+    // next round, but they are still undone work and shouldn't read as 0.
+    prisma.order.count({
+      where: { printedAt: null, status: { in: NEEDS_SHIPPING_STATUSES }, isUnpaid: false },
+    }),
+  ]);
+
+  const countOf = (isToday: boolean, statuses?: OrderStatus[]) =>
+    rows
+      .filter((r) => r.isToday === isToday && (!statuses || statuses.includes(r.status)))
+      .reduce((sum, r) => sum + r.count, 0);
   const revenueOf = (isToday: boolean) =>
     rows.filter((r) => r.isToday === isToday).reduce((sum, r) => sum + (r.revenue ?? 0), 0);
 
   return {
-    newOrders: computeKpi(countOf(true, ["NEW"]), countOf(false, ["NEW"])),
-    pendingShipment: computeKpi(countOf(true, ["PENDING_SHIPMENT"]), countOf(false, ["PENDING_SHIPMENT"])),
-    shipped: computeKpi(countOf(true, ["SHIPPED"]), countOf(false, ["SHIPPED"])),
+    newOrders: computeKpi(countOf(true), countOf(false)),
+    // A backlog is a snapshot, not a flow — "12 waiting" has no sensible
+    // "vs yesterday", so no trend badge (changePct null hides it).
+    pendingShipment: { value: backlog, changePct: null, direction: "flat" },
+    shipped: computeKpi(shippedNow, shippedBefore),
     cancelledOrReturned: computeKpi(
       countOf(true, ["CANCELLED", "RETURNED"]),
       countOf(false, ["CANCELLED", "RETURNED"])
@@ -127,15 +166,18 @@ export interface PlatformSharePoint {
   colorHex: string;
 }
 
-/** Today's actual shipments by channel — keyed off `printedAt` (when a
- * tracking number first appeared), the same "this order went out today"
- * definition src/lib/shippingSummary.ts uses for the packing list, rather
- * than `orderDate` (when it was placed). An order placed today isn't
- * necessarily shipped today, and an order shipped today may well have been
- * placed days earlier — this tracks actual outbound volume per channel. */
+/** Today's shipments by channel: exactly the orders on today's packing list
+ * (the current 14:00-cutoff window — see shippingWindowWhere), so the donut
+ * and the shipping summary page can never disagree about what "today" is.
+ * Keyed on when the tracking number arrived, not when the order was placed:
+ * an order placed today isn't necessarily shipped today, and one shipped
+ * today may have been placed days earlier. */
 export async function getShippedTodayByPlatform(): Promise<{ data: PlatformSharePoint[]; total: number }> {
-  const todayStart = startOfDaysAgoBangkok(0);
-  const rows = await prisma.order.groupBy({ by: ["platform"], _count: { _all: true }, where: { printedAt: { gte: todayStart } } });
+  const rows = await prisma.order.groupBy({
+    by: ["platform"],
+    _count: { _all: true },
+    where: shippingWindowWhere(currentShippingCutoffWindow()),
+  });
   const total = rows.reduce((sum, r) => sum + r._count._all, 0);
   const data: PlatformSharePoint[] = Object.values(Platform).map((platform) => {
     const count = rows.find((r) => r.platform === platform)?._count._all ?? 0;
