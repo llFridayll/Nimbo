@@ -95,12 +95,16 @@ export const activityActionLabel: Record<ActivityAction, string> = {
   EMPLOYEE_DELETE: "ลบบัญชีพนักงาน",
   EMPLOYEE_PASSWORD_RESET: "รีเซ็ตรหัสผ่านพนักงาน",
   PASSWORD_CHANGE_SELF: "เปลี่ยนรหัสผ่านตัวเอง",
+  AVATAR_UPDATE: "เปลี่ยนรูปโปรไฟล์",
+  DISPLAY_NAME_UPDATE: "เปลี่ยนชื่อที่แสดง",
+  AVATAR_REMOVE: "ลบรูปโปรไฟล์",
   PROBLEM_RESOLVE: "แก้ไขปัญหาออเดอร์",
   PROBLEM_REOPEN: "เปิดปัญหาออเดอร์ใหม่",
   ORDER_STATUS_MANUAL_CHANGE: "เปลี่ยนสถานะออเดอร์ด้วยมือ",
   MANUAL_SYNC: "กดอัปเดตข้อมูลทุกช่องทาง",
   LINE_SUMMARY_SENT: "ส่งสรุปออเดอร์จัดส่งเข้า LINE",
   ORDER_FILE_MANUAL_IMPORT: "นำเข้าออเดอร์ด้วยไฟล์ (Shopee/Lazada)",
+  CANCELLATION_FILE_IMPORT: "นำเข้ารายการยกเลิกด้วยไฟล์",
   LINE_TARGET_RESET: "รีเซ็ตกลุ่ม LINE ปลายทาง",
 };
 

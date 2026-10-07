@@ -2,6 +2,7 @@ import "server-only";
 import * as XLSX from "xlsx";
 import { OrderStatus, Platform } from "@prisma/client";
 import type { NormalizedOrder, NormalizedOrderItem } from "@/lib/platforms/types";
+import { parseLazadaCancellation } from "@/lib/platforms/cancellationFields";
 
 // Column headers from Lazada Seller Center's order-export file (verified
 // against a real ~10,000-row export, Sept 2026), looked up by NAME rather
@@ -28,6 +29,11 @@ const HEADER = {
   SHIPPING_PROVIDER: "shippingProvider",
   TRACKING_CODE: "trackingCode",
   STATUS: "status",
+  // Lazada files the cancellation under its "failed delivery" columns, which
+  // is also where a buyer's cancellation reason lands.
+  CANCEL_REASON: "buyerFailedDeliveryReason",
+  CANCEL_DETAIL: "buyerFailedDeliveryDetail",
+  CANCEL_INITIATOR: "buyerFailedDeliveryReturnInitiator",
 } as const;
 
 // Every status value seen in a real export, plus the couple of others
@@ -176,6 +182,18 @@ export function parseLazadaExport(buffer: Buffer, shopName: string): LazadaImpor
     // drop every tracking number but the first package's.
     const trackingCodes = Array.from(new Set(itemRows.map((row) => cell(row, HEADER.TRACKING_CODE)).filter(Boolean)));
 
+    // Only read for cancelled orders — these columns also carry genuine
+    // failed-DELIVERY reasons on orders that shipped and came back, which are
+    // returns, not cancellations.
+    const cancellation =
+      status === OrderStatus.CANCELLED
+        ? parseLazadaCancellation(
+            cell(first, HEADER.CANCEL_REASON),
+            cell(first, HEADER.CANCEL_DETAIL),
+            cell(first, HEADER.CANCEL_INITIATOR),
+          )
+        : {};
+
     orders.push({
       platform: Platform.LAZADA,
       platformOrderId: orderNumber,
@@ -192,6 +210,7 @@ export function parseLazadaExport(buffer: Buffer, shopName: string): LazadaImpor
       trackingNumber: trackingCodes.length > 0 ? trackingCodes.join(" / ") : undefined,
       shopId: shopName,
       shopName,
+      ...cancellation,
       items,
       rawPayload: itemRows,
     });

@@ -83,4 +83,4 @@ npm run db:studio     # Prisma Studio — ดู/แก้ข้อมูลผ�
 npm run db:seed       # สร้างข้อมูล mock ใหม่ (รันซ้ำได้ปลอดภัย เพราะ upsert ตาม platform+order id)
 npm run build         # build สำหรับ production พร้อม typecheck
 ```
-# Nimbo
+# K Garden OMS

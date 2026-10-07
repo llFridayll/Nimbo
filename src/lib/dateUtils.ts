@@ -9,12 +9,16 @@ export function startOfDaysAgoBangkok(daysBack: number): Date {
 }
 
 // --- Shipping cutoff logic ---------------------------------------------
-// The warehouse dispatches Monday–Saturday only, with a daily 13:00
+// The warehouse dispatches Monday–Saturday only, with a daily 14:00
 // (Bangkok time) order cutoff. Since there is no Sunday dispatch, orders
-// placed after Saturday's 13:00 cutoff through Monday's 13:00 cutoff all
+// placed after Saturday's 14:00 cutoff through Monday's 14:00 cutoff all
 // roll into Monday's shipment.
 
-const SHIPPING_CUTOFF_HOUR = 13;
+// Single source of truth for the cutoff — the shipping summary, the packing
+// slip and the carrier hand-off all derive their window from this, so moving
+// the hour here moves all three together. Changed 13:00 -> 14:00 on
+// 2026-09-30 at the warehouse's request.
+const SHIPPING_CUTOFF_HOUR = 14;
 
 interface BangkokDateParts {
   year: number;
@@ -37,8 +41,8 @@ function addBangkokDays(parts: BangkokDateParts, n: number): BangkokDateParts {
   return bangkokDateParts(new Date(Date.UTC(parts.year, parts.month, parts.day + n) - BANGKOK_OFFSET_MS));
 }
 
-/** The UTC instant of the 13:00 Bangkok-time cutoff on the given Bangkok
- * calendar date. */
+/** The UTC instant of the daily Bangkok-time cutoff (SHIPPING_CUTOFF_HOUR)
+ * on the given Bangkok calendar date. */
 function cutoffInstant(parts: BangkokDateParts): Date {
   return new Date(Date.UTC(parts.year, parts.month, parts.day, SHIPPING_CUTOFF_HOUR) - BANGKOK_OFFSET_MS);
 }
@@ -50,12 +54,12 @@ export interface ShippingCutoffWindow {
   dow: number;
   /** Window start (inclusive): the previous cutoff instant. */
   from: Date;
-  /** Window end (exclusive): this ship date's 13:00 cutoff instant. */
+  /** Window end (exclusive): this ship date's cutoff instant. */
   to: Date;
 }
 
 /** Computes the order-acceptance window for a given ship date, under a
- * Mon–Sat dispatch schedule with a daily 13:00 Bangkok cutoff. `anyDate` may
+ * Mon–Sat dispatch schedule with a daily 14:00 Bangkok cutoff. `anyDate` may
  * be any instant that falls on the intended Bangkok calendar day — if that
  * day is a Sunday, it's rolled forward to the following Monday since orders
  * placed "on Sunday" ship Monday anyway. */
@@ -72,18 +76,19 @@ export function shippingCutoffWindowForDate(anyDate: Date): ShippingCutoffWindow
 /** Today's dispatch window — the batch actually being packed and printed
  * right now. Rolled forward only on Sunday, which is never a dispatch day.
  *
- * This deliberately does NOT jump to the next dispatch day once the 13:00
- * cutoff passes. It used to, and the effect was that at 13:00 — the exact
+ * This deliberately does NOT jump to the next dispatch day once the cutoff
+ * passes. It used to, and the effect was that at the cutoff — the exact
  * moment staff print the packing slip — every default view flipped to
  * tomorrow's batch, which is empty: the page showed nothing and the Excel
  * download button went dead (it is disabled when there are no rows), with no
  * indication that the data had simply moved to the previous day.
  *
- * Deliberate trade-off: after 13:00, an order that still has no tracking
+ * Deliberate trade-off: after the cutoff, an order that still has no tracking
  * number belongs to the NEXT window and so no longer shows here by default —
- * "วันถัดไป →" reaches it. That is the rarer case; of the last 58 printed
- * orders, 49 were printed before 13:00, so today's window is what staff need
- * on screen nearly all of the time. Behaviour before 13:00 is unchanged. */
+ * "วันถัดไป →" reaches it. That is the rarer case: measured while the cutoff
+ * was still 13:00, 49 of the last 58 printed orders were printed before it,
+ * and moving the cutoff an hour later only widens that majority. Behaviour
+ * before the cutoff is unchanged. */
 export function currentShippingCutoffWindow(now: Date = new Date()): ShippingCutoffWindow {
   const parts = bangkokDateParts(now);
   const target = parts.dow === 0 ? addBangkokDays(parts, 1) : parts; // Sunday -> Monday

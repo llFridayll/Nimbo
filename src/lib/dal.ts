@@ -18,6 +18,12 @@ export interface CurrentUser {
   username: string;
   displayName: string;
   role: UserRole;
+  /** When the profile picture last changed, or null if there isn't one. The
+   * image bytes themselves are never selected here — this runs on every
+   * protected page, and dragging a photo through it each time would be
+   * pointless traffic. Pass this to avatarSrc() to build the URL that
+   * /api/users/[id]/avatar serves the bytes from. */
+  avatarUpdatedAt: Date | null;
 }
 
 /** Stronger, DB-backed check — confirms the account still exists and hasn't
@@ -28,10 +34,21 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser> => {
   const session = await verifySession();
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, username: true, displayName: true, role: true, isActive: true },
+    select: { id: true, username: true, displayName: true, role: true, isActive: true, avatarUpdatedAt: true },
   });
-  if (!user || !user.isActive) redirect("/login");
-  return { id: user.id, username: user.username, displayName: user.displayName, role: user.role };
+  // Not /login: the cookie is still valid-looking, so proxy.ts would treat
+  // this as logged in and bounce /login straight back here — an endless loop
+  // the user cannot escape without clearing site data by hand. A Server
+  // Component can't delete the cookie itself, so hand off to the route
+  // handler that can. See src/app/api/auth/signed-out/route.ts.
+  if (!user || !user.isActive) redirect("/api/auth/signed-out");
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    role: user.role,
+    avatarUpdatedAt: user.avatarUpdatedAt,
+  };
 });
 
 export async function requireAdmin(): Promise<CurrentUser> {

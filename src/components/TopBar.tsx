@@ -1,22 +1,17 @@
-"use client";
-
+// No "use client": the account menu that needed useState lived here and is
+// gone — the sidebar footer already carries the avatar, role and log-out
+// button. What's left is a plain GET form and links, so this stays on the
+// server and out of the client bundle. SyncButton brings its own boundary.
 import Link from "next/link";
-import { useState } from "react";
-import { logout } from "@/lib/authActions";
 import { SyncButton } from "@/components/SyncButton";
-import { UserAvatar } from "@/components/UserAvatar";
-import { SearchIcon, BellIcon, ChevronDownIcon } from "@/components/icons";
+import { SearchIcon, BellIcon } from "@/components/icons";
 
 interface TopBarProps {
-  displayName: string;
-  roleLabel: string;
   openProblemsCount: number;
   lastUpdatedLabel: string;
 }
 
-export function TopBar({ displayName, roleLabel, openProblemsCount, lastUpdatedLabel }: TopBarProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-
+export function TopBar({ openProblemsCount, lastUpdatedLabel }: TopBarProps) {
   return (
     <header className="print:hidden hidden h-16 shrink-0 items-center justify-between gap-4 border-b border-gray-200 bg-white/80 px-6 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/80 md:flex">
       <form action="/orders" method="GET" className="relative w-full max-w-md">
@@ -44,34 +39,6 @@ export function TopBar({ displayName, roleLabel, openProblemsCount, lastUpdatedL
             </span>
           )}
         </Link>
-
-        <div className="relative" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setMenuOpen(false)}>
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-expanded={menuOpen}
-            className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
-            <UserAvatar name={displayName} />
-            <span className="text-left leading-tight">
-              <span className="block text-sm font-medium text-gray-800 dark:text-gray-200">{displayName}</span>
-              <span className="block text-[11px] text-gray-400 dark:text-gray-500">{roleLabel}</span>
-            </span>
-            <ChevronDownIcon className={`h-3.5 w-3.5 text-gray-400 transition-transform ${menuOpen ? "rotate-180" : ""}`} />
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 z-10 mt-1.5 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-              <form action={logout}>
-                <button
-                  type="submit"
-                  className="block w-full px-3 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                  ออกจากระบบ
-                </button>
-              </form>
-            </div>
-          )}
-        </div>
       </div>
     </header>
   );

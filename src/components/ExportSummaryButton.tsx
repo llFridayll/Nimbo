@@ -161,7 +161,7 @@ function SlipPreviewTable({ preview, isUpdating }: { preview: SlipPreviewCarrier
       <div className="py-10 text-center">
         <p className="text-sm text-gray-500 dark:text-gray-400">ยังไม่มีออเดอร์ในรอบจัดส่งนี้</p>
         <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-          รอบจะเปลี่ยนทุกวันเวลา 13:00 น. — ถ้าเพิ่งเลยเวลานั้นมา ใบของรอบที่แล้วจะอยู่ที่วันก่อนหน้า
+          รอบจะเปลี่ยนทุกวันเวลา 14:00 น. — ถ้าเพิ่งเลยเวลานั้นมา ใบของรอบที่แล้วจะอยู่ที่วันก่อนหน้า
         </p>
       </div>
     );

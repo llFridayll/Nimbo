@@ -81,22 +81,15 @@ export function buildCarrierBaselineMessage(kongNumber: number, carrier: string,
   return out.join("\n");
 }
 
-/** A same-day follow-up for a carrier that already has a baseline message —
- * meant to be sent as a quote-reply (see quoteToken on LineMessageSpec) to
- * that original message, so it reads as "เพิ่ม" onto the existing pile
- * instead of restating everything already reported. `lines` is only the
- * orders/lines that weren't part of an earlier message for this carrier
- * (see shippingSummaryScheduler.ts). */
-export function buildCarrierDeltaMessage(lines: ShippingSummarySkuLine[]): string {
-  const out = ["เพิ่ม", ...buildOrderGroupsText(lines)];
-  return out.join("\n");
-}
-
-/** One LINE message per carrier — used by the manual "ส่งเข้า LINE" button
- * for a one-off full resend. The automatic checkpoint scheduler
- * (shippingSummaryScheduler.ts) builds messages itself via
- * buildCarrierBaselineMessage/buildCarrierDeltaMessage instead, since it
- * needs to track quote tokens per carrier. */
+/** One LINE message per carrier — this is the whole LINE path now: staff
+ * press "ส่งเข้า LINE" when they want the summary, and it sends the full
+ * picture as of that moment.
+ *
+ * There used to be an automatic scheduler that posted at 08:30/10:00/11:30/
+ * 12:45 and sent only the delta since its last post, quote-replying to each
+ * carrier's first message of the day. It was switched off by request and the
+ * code removed on 2026-09-30 — sending on demand is what staff actually use,
+ * and a full resend needs none of that per-carrier quote-token bookkeeping. */
 export function buildShippingSummaryLineMessages(summary: ShippingSummaryResult): string[] {
   const dateLabel = shippingSummaryDateLabel(summary.window.shipDate);
 

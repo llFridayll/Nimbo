@@ -15,8 +15,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="mb-6 flex flex-col items-center text-center">
-            <Image src="/nimbo-logo-icon.png" alt="Nimbo" width={48} height={48} className="h-12 w-12" priority />
-            <h1 className="mt-3 text-xl font-bold text-primary dark:text-gray-100">Nimbo</h1>
+            <Image src="/kgarden-logo-icon.png" alt="K Garden OMS" width={48} height={48} className="h-12 w-12" priority />
+            <h1 className="mt-3 text-xl font-bold text-primary dark:text-gray-100">K Garden OMS</h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">ระบบจัดการออเดอร์หลายช่องทาง</p>
             <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">สำหรับเจ้าหน้าที่ที่ได้รับอนุญาต</p>
           </div>
@@ -65,7 +65,7 @@ export default function LoginPage() {
         </div>
 
         <div className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500">
-          <p>Nimbo v1.0</p>
+          <p>K Garden OMS v1.0</p>
           <p className="mt-0.5">มีปัญหาการเข้าใช้งาน? ติดต่อผู้ดูแลระบบ</p>
         </div>
       </div>

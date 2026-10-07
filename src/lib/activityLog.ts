@@ -13,12 +13,16 @@ export type ActivityAction =
   | "EMPLOYEE_DELETE"
   | "EMPLOYEE_PASSWORD_RESET"
   | "PASSWORD_CHANGE_SELF"
+  | "AVATAR_UPDATE"
+  | "DISPLAY_NAME_UPDATE"
+  | "AVATAR_REMOVE"
   | "PROBLEM_RESOLVE"
   | "PROBLEM_REOPEN"
   | "ORDER_STATUS_MANUAL_CHANGE"
   | "MANUAL_SYNC"
   | "LINE_SUMMARY_SENT"
   | "ORDER_FILE_MANUAL_IMPORT"
+  | "CANCELLATION_FILE_IMPORT"
   | "LINE_TARGET_RESET";
 
 export async function logActivity(params: { userId: string; username: string; action: ActivityAction; detail?: string }) {
