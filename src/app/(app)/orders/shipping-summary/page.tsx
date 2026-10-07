@@ -100,7 +100,7 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
         <div>
           <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">สรุปออเดอร์สำหรับจัดส่ง</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            ตัดรอบทุกวันเวลา 13:00 น. — จัดส่งจันทร์ถึงเสาร์ ออเดอร์หลัง 13:00 วันเสาร์ถึง 13:00 วันจันทร์ รวมจัดส่งวันจันทร์
+            ตัดรอบทุกวันเวลา 14:00 น. — จัดส่งจันทร์ถึงเสาร์ ออเดอร์หลัง 14:00 วันเสาร์ถึง 14:00 วันจันทร์ รวมจัดส่งวันจันทร์
           </p>
         </div>
         <div className="flex items-center gap-2 print:hidden">

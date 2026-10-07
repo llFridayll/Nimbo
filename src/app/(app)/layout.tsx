@@ -1,9 +1,8 @@
+import { ChatWidget } from "@/components/ChatWidget";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
 import { getCurrentUser } from "@/lib/dal";
-import { roleLabel } from "@/lib/labels";
 import { getOpenProblemsCount, getLastSyncedLabel } from "@/lib/dashboardStats";
-import { UserRole } from "@prisma/client";
 
 // Every real app page lives under this (app) route group so this layout can
 // both gate them behind login (getCurrentUser() redirects to /login if
@@ -22,8 +21,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Sidebar user={user} />
         <div className="flex min-w-0 flex-1 flex-col md:overflow-hidden">
           <TopBar
-            displayName={user.displayName}
-            roleLabel={roleLabel(user.role === UserRole.ADMIN)}
             openProblemsCount={openProblemsCount}
             lastUpdatedLabel={lastUpdatedLabel}
           />
@@ -32,6 +29,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
+      {/* Outside the rounded shell so it floats over the whole viewport rather
+          than being clipped by the shell's overflow-hidden. */}
+      <ChatWidget />
     </div>
   );
 }

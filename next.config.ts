@@ -33,9 +33,14 @@ const nextConfig: NextConfig = {
   //   the whole 192.168.1.x subnet so a DHCP lease change doesn't silently
   //   break every button again; it is matched segment-by-segment, so
   //   "192.168.1.*" matches 192.168.1.120 but nothing outside that subnet.
+  // - "*.local": the Bonjour/mDNS name this Mac already advertises
+  //   (MacBook-Pro-khxng-Thanawut.local). The IP above is a DHCP lease and
+  //   really does move — it went from .172 to .95 inside one day — which
+  //   breaks every bookmark staff have. The .local name follows the machine
+  //   instead of the lease, so it is the address worth handing out.
   //
   // Dev-only — `next start` does not apply this blocking.
-  allowedDevOrigins: ["scope-track-mobile.ngrok-free.dev", "192.168.1.*"],
+  allowedDevOrigins: ["scope-track-mobile.ngrok-free.dev", "192.168.1.*", "*.local"],
   async headers() {
     if (process.env.NODE_ENV === "production") return [];
     // Turbopack's dev-mode static chunks (/_next/static/chunks/...) keep the

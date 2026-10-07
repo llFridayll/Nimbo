@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { UserRole } from "@prisma/client";
 import {
   MenuIcon,
@@ -17,10 +17,12 @@ import {
   UploadIcon,
   UsersIcon,
   ClipboardListIcon,
+  XCircleIcon,
 } from "@/components/icons";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserAvatar } from "@/components/UserAvatar";
 import { logout } from "@/lib/authActions";
+import { avatarSrc } from "@/lib/avatar";
 import { roleLabel } from "@/lib/labels";
 import type { CurrentUser } from "@/lib/dal";
 
@@ -46,7 +48,10 @@ const NAV_SECTIONS: NavSection[] = [
   },
   {
     sectionLabel: "รายงาน",
-    items: [{ href: "/sales", label: "ประวัติการขาย", icon: TrendingUpIcon }],
+    items: [
+      { href: "/sales", label: "ประวัติการขาย", icon: TrendingUpIcon },
+      { href: "/cancellations", label: "การยกเลิกออเดอร์", icon: XCircleIcon },
+    ],
   },
 ];
 
@@ -55,6 +60,7 @@ const ADMIN_SECTIONS: NavSection[] = [
     sectionLabel: "ระบบ",
     items: [
       { href: "/admin/order-import", label: "นำเข้าออเดอร์ (Shopee/Lazada)", icon: UploadIcon },
+      { href: "/admin/cancellation-import", label: "นำเข้ารายการยกเลิก / คืนสินค้า", icon: XCircleIcon },
       { href: "/admin/employees", label: "จัดการพนักงาน", icon: UsersIcon },
       { href: "/admin/activity-log", label: "ประวัติการใช้งาน", icon: ClipboardListIcon },
     ],
@@ -64,9 +70,9 @@ const ADMIN_SECTIONS: NavSection[] = [
 function Brand() {
   return (
     <Link href="/" className="flex items-center gap-2">
-      <Image src="/nimbo-logo-icon.png" alt="Nimbo" width={40} height={40} className="h-10 w-10 shrink-0" priority />
+      <Image src="/kgarden-logo-icon.png" alt="K Garden OMS" width={40} height={40} className="h-10 w-10 shrink-0" priority />
       <span className="flex flex-col leading-tight">
-        <span className="text-sm font-semibold tracking-tight text-gray-900 dark:text-gray-100">Nimbo</span>
+        <span className="text-sm font-semibold tracking-tight text-gray-900 dark:text-gray-100">K Garden OMS</span>
         <span className="text-[11px] text-gray-400 dark:text-gray-500">ระบบจัดการออเดอร์หลายช่องทาง</span>
       </span>
     </Link>
@@ -107,12 +113,16 @@ function NavLinks({ onNavigate, className = "", isAdmin = false }: { onNavigate?
 
 export function Sidebar({ user }: { user: CurrentUser }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  // Which route the mobile drawer was opened on, rather than a plain boolean:
+  // the drawer must close itself on navigation, and deriving "open" from the
+  // current path does that during render instead of through an effect that
+  // calls setState (which triggers a second render pass, and which the
+  // react-hooks/set-state-in-effect rule rejects). It also covers routes the
+  // drawer's own links don't handle — the brand link, and browser back.
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
+  const open = openedAt === pathname;
+  const setOpen = (next: boolean) => setOpenedAt(next ? pathname : null);
   const isAdmin = user.role === UserRole.ADMIN;
-
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
 
   return (
     <>
@@ -126,13 +136,16 @@ export function Sidebar({ user }: { user: CurrentUser }) {
         <NavLinks className="flex-1 px-3 py-5" isAdmin={isAdmin} />
         <div className="border-t border-gray-100 px-5 py-3 dark:border-gray-800">
           <div className="flex items-center justify-between">
-            <div className="flex min-w-0 items-center gap-2">
-              <UserAvatar name={user.displayName} />
+            <Link
+              href="/profile"
+              className="flex min-w-0 items-center gap-2 rounded-md p-1 -m-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              <UserAvatar name={user.displayName} src={avatarSrc(user.id, user.avatarUpdatedAt)} />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{user.displayName}</p>
                 <p className="text-xs text-gray-400 dark:text-gray-500">{roleLabel(isAdmin)}</p>
               </div>
-            </div>
+            </Link>
             <ThemeToggle />
           </div>
           <form action={logout} className="mt-2">
@@ -155,7 +168,7 @@ export function Sidebar({ user }: { user: CurrentUser }) {
           <ThemeToggle />
           <button
             type="button"
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setOpen(!open)}
             aria-label={open ? "ปิดเมนู" : "เปิดเมนู"}
             aria-expanded={open}
             className="flex h-10 w-10 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
@@ -182,13 +195,13 @@ export function Sidebar({ user }: { user: CurrentUser }) {
             </div>
             <NavLinks onNavigate={() => setOpen(false)} className="px-3 py-5" isAdmin={isAdmin} />
             <div className="border-t border-gray-100 px-5 py-3 dark:border-gray-800">
-              <div className="flex items-center gap-2">
-                <UserAvatar name={user.displayName} />
+              <Link href="/profile" onClick={() => setOpen(false)} className="flex items-center gap-2">
+                <UserAvatar name={user.displayName} src={avatarSrc(user.id, user.avatarUpdatedAt)} />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{user.displayName}</p>
                   <p className="text-xs text-gray-400 dark:text-gray-500">{roleLabel(isAdmin)}</p>
                 </div>
-              </div>
+              </Link>
               <form action={logout} className="mt-2">
                 <button
                   type="submit"

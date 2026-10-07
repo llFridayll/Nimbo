@@ -13,12 +13,16 @@ const ACTION_ACCENT: Record<ActivityAction, string> = {
   EMPLOYEE_DELETE: "bg-red-500",
   EMPLOYEE_PASSWORD_RESET: "bg-purple-500",
   PASSWORD_CHANGE_SELF: "bg-purple-500",
+  AVATAR_UPDATE: "bg-sky-500",
+  DISPLAY_NAME_UPDATE: "bg-sky-500",
+  AVATAR_REMOVE: "bg-gray-400",
   PROBLEM_RESOLVE: "bg-emerald-500",
   PROBLEM_REOPEN: "bg-amber-500",
   ORDER_STATUS_MANUAL_CHANGE: "bg-indigo-500",
   MANUAL_SYNC: "bg-indigo-500",
   LINE_SUMMARY_SENT: "bg-green-500",
   ORDER_FILE_MANUAL_IMPORT: "bg-orange-500",
+  CANCELLATION_FILE_IMPORT: "bg-orange-500",
   LINE_TARGET_RESET: "bg-red-500",
 };
 

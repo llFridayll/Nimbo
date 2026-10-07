@@ -3,6 +3,7 @@ import { prisma } from "./db";
 import { adapters } from "./platforms";
 import { NormalizedOrder } from "./platforms/types";
 import { startOfDaysAgoBangkok } from "./dateUtils";
+import { printedAtFor } from "./printedAt";
 
 const DELAYED_SHIPMENT_THRESHOLD_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
 
@@ -36,11 +37,9 @@ export async function upsertOrder(order: NormalizedOrder) {
     where: { platform_platformOrderId: { platform: order.platform, platformOrderId: order.platformOrderId } },
   });
 
-  // The moment a tracking number first appears is the real-world "label
-  // printed" event the shipping summary buckets orders by (see
-  // shippingSummary.ts) — only stamp it on that first transition, never
-  // overwrite an already-recorded printedAt.
-  const becomesPrinted = !existing?.trackingNumber && Boolean(order.trackingNumber);
+  // The day the tracking number arrived is the day the order ships — see
+  // printedAt.ts for which source wins when.
+  const printedAt = printedAtFor(order, existing, new Date());
 
   const saved = await prisma.order.upsert({
     where: { platform_platformOrderId: { platform: order.platform, platformOrderId: order.platformOrderId } },
@@ -58,19 +57,13 @@ export async function upsertOrder(order: NormalizedOrder) {
       shippingCarrier: order.shippingCarrier,
       trackingNumber: order.trackingNumber,
       shippingStatus: order.shippingStatus,
-      // A brand-new order that ALREADY carries a tracking number (typical
-      // for a Shopee/Lazada file exported after the seller already printed
-      // the label there) was clearly printed before this moment, not "just
-      // now" — the order's own date is a far better estimate than the
-      // import timestamp, which would otherwise dump a whole batch of
-      // already-shipped historical orders into today's folder. A live-synced
-      // platform (TikTok) instead normally sees the order BEFORE it has a
-      // tracking number, so the real "just printed" moment is caught by the
-      // update branch below when it later transitions to having one.
-      printedAt: order.trackingNumber ? order.orderDate : null,
+      printedAt: printedAt ?? null,
       shopId: order.shopId,
       shopName: order.shopName,
       isUnpaid: order.isUnpaid ?? false,
+      cancelReason: order.cancelReason ?? null,
+      cancelInitiator: order.cancelInitiator ?? null,
+      cancelledAt: order.cancelledAt ?? null,
       rawPayload: order.rawPayload as never,
       items: {
         create: order.items.map((it) => ({
@@ -95,10 +88,19 @@ export async function upsertOrder(order: NormalizedOrder) {
       shippingCarrier: order.shippingCarrier,
       trackingNumber: order.trackingNumber,
       shippingStatus: order.shippingStatus,
-      ...(becomesPrinted ? { printedAt: new Date() } : {}),
+      ...(printedAt !== undefined ? { printedAt } : {}),
       shopId: order.shopId,
       shopName: order.shopName,
       isUnpaid: order.isUnpaid ?? false,
+      // Written only when this sync actually carries the value. Blanking it
+      // instead would let a routine re-import of an order file erase a
+      // cancellation reason that came in through the separate cancellation
+      // import — the order export and the cancellation export don't always
+      // cover the same orders, so the two are additive, not authoritative
+      // over one another.
+      ...(order.cancelReason !== undefined ? { cancelReason: order.cancelReason } : {}),
+      ...(order.cancelInitiator !== undefined ? { cancelInitiator: order.cancelInitiator } : {}),
+      ...(order.cancelledAt !== undefined ? { cancelledAt: order.cancelledAt } : {}),
       rawPayload: order.rawPayload as never,
     },
   });

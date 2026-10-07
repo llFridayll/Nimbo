@@ -70,19 +70,19 @@ enum ViolationSource {
 }
 
 model Order {
-  id               String       @id @default(cuid())
-  platform         Platform
-  platformOrderId  String
-  status           OrderStatus  @default(NEW)
+  id              String      @id @default(cuid())
+  platform        Platform
+  platformOrderId String
+  status          OrderStatus @default(NEW)
 
-  buyerName        String?
-  buyerPhone       String?
-  buyerUsername    String?
+  buyerName     String?
+  buyerPhone    String?
+  buyerUsername String?
   /// District + province only (e.g. "เกาะลันตา, กระบี่") — the one part of
   /// the shipping address TikTok Shop's API does NOT mask for privacy; the
   /// street-level address is redacted server-side by TikTok and never
   /// reaches this app at all, so there's nothing more precise to store.
-  buyerRegion      String?
+  buyerRegion   String?
 
   // Kept as Float (not Decimal) on purpose even though Postgres now supports
   // it — switching would return a Prisma Decimal object instead of a plain
@@ -90,26 +90,27 @@ model Order {
   // it), a breaking change with real regression risk that's out of scope
   // for a straight provider migration. Worth doing as its own deliberate
   // follow-up, not bundled in here.
-  totalAmount      Float
-  currency         String       @default("THB")
+  totalAmount Float
+  currency    String @default("THB")
 
-  orderDate        DateTime
-  shippingCarrier  String?
-  trackingNumber   String?
-  shippingStatus   String?
-  /// Stamped the moment a tracking number first appears on this order (sync
-  /// detecting a change, or a manual import bringing one in already
-  /// assigned) — this is the real-world "label printed" moment, and is what
-  /// the shipping summary buckets orders by (see shippingSummary.ts). Null
-  /// means the order has no tracking number yet and still counts as pending
-  /// for whichever day is "today" until it gets one.
-  printedAt        DateTime?
+  orderDate       DateTime
+  shippingCarrier String?
+  trackingNumber  String?
+  shippingStatus  String?
+  /// When this order's tracking number arrived — the warehouse rule is that
+  /// the day it arrives is the day the order ships, and the shipping summary
+  /// buckets on it (see shippingSummary.ts). Which source wins is decided in
+  /// printedAt.ts: TikTok's own label time (rts_time) when there is one,
+  /// otherwise the first time this system saw the number. Null means no
+  /// tracking number yet; the order counts as pending for whichever day is
+  /// "today" until it gets one. Not a log of anyone pressing print.
+  printedAt       DateTime?
 
   /// Which store this order came from, for platforms where one seller
   /// account can run multiple shops (e.g. several TikTok Shop stores).
   /// Null for platforms/orders synced before multi-shop support existed.
-  shopId           String?
-  shopName         String?
+  shopId   String?
+  shopName String?
 
   /// True when the platform itself reports this order as still awaiting
   /// payment (TikTok's "UNPAID" order_status, Shopee's "ยังไม่ชำระ", Lazada's
@@ -118,16 +119,49 @@ model Order {
   /// is the only signal that distinguishes them. Used to keep unpaid orders
   /// out of the shipping-summary packing list (see shippingSummary.ts) —
   /// nothing ships before it's paid for.
-  isUnpaid         Boolean      @default(false)
+  isUnpaid Boolean @default(false)
 
-  rawPayload       Json?
+  /// Why this order was cancelled, lifted out of the platform's payload at
+  /// sync/import time. All three platforms report the reason and the
+  /// initiator — TikTok through the API (cancel_reason /
+  /// cancellation_initiator / cancel_time), Shopee and Lazada inside their
+  /// own order exports (see platforms/cancellationFields.ts). Only TikTok
+  /// carries a timestamp, so cancelledAt stays null for the other two.
+  ///
+  /// Denormalised rather than read from rawPayload on demand for the same
+  /// reason printedAt is: the cancellations page groups and date-filters on
+  /// them, and doing that through a JSON operator means detoasting a ~2.3KB
+  /// payload per row with no index to lean on — exactly the shape of the
+  /// slow-page problem 59d1fdc fixed.
+  cancelReason    String?
+  /// BUYER, SELLER or SYSTEM, verbatim from the platform.
+  cancelInitiator String?
+  cancelledAt     DateTime?
 
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  /// A return/refund AFTER the order shipped — a different event from a
+  /// cancellation, which happens before it. Kept in its own columns rather
+  /// than reusing cancelReason so the cancellations report can't silently
+  /// count a damaged-on-arrival return as a buyer changing their mind.
+  ///
+  /// Only Lazada reports these today, through its returns export (the
+  /// "ราการคืนสินค้า" file) — Shopee's order export has a
+  /// "สถานะการคืนเงินหรือคืนสินค้า" column but no reason, and TikTok's API
+  /// returns aren't wired up. Null therefore means "no return recorded",
+  /// not "no return happened".
+  returnReason String?
+  returnedAt   DateTime?
+  /// What the platform actually refunded, in THB. Can differ from
+  /// totalAmount (partial refunds, shipping handled separately).
+  refundAmount Float?
 
-  items            OrderItem[]
-  statusHistory    OrderStatusHistory[]
-  problem          ProblemTicket?
+  rawPayload Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  problem       ProblemTicket?
 
   @@unique([platform, platformOrderId])
   @@index([status])
@@ -142,40 +176,49 @@ model Order {
   // platform alone; the composite also serves the very common
   // "one channel, recent orders" filter on the orders and sales pages.
   @@index([platform, orderDate])
+  // The cancellations page's every query: cancelled orders inside a date
+  // window, grouped by reason/initiator. Keyed on orderDate, not cancelledAt,
+  // because that page filters by order date like every other page here — and
+  // because the 36 imported Shopee/Lazada cancellations have no cancelledAt
+  // at all, so a cancelledAt window would silently drop them.
+  @@index([status, orderDate])
+  /// The returns report filters on "has a return" within a date window; without
+  /// this it is a full scan of every order ever synced.
+  @@index([returnedAt])
 }
 
 model OrderItem {
-  id           String   @id @default(cuid())
-  orderId      String
-  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  sku          String
-  productName  String
-  quantity     Int
-  unitPrice    Float
-  imageUrl     String?
+  sku         String
+  productName String
+  quantity    Int
+  unitPrice   Float
+  imageUrl    String?
 
   @@index([orderId])
   @@index([sku])
 }
 
 model OrderStatusHistory {
-  id          String      @id @default(cuid())
-  orderId     String
-  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  status      OrderStatus
-  note        String?
-  occurredAt  DateTime    @default(now())
-  createdAt   DateTime    @default(now())
+  status     OrderStatus
+  note       String?
+  occurredAt DateTime    @default(now())
+  createdAt  DateTime    @default(now())
 
   @@index([orderId])
 }
 
 model ProblemTicket {
-  id          String          @id @default(cuid())
-  orderId     String          @unique
-  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   type        ProblemType
   priority    ProblemPriority @default(MEDIUM)
@@ -184,8 +227,8 @@ model ProblemTicket {
   resolvedAt  DateTime?
   assignee    String?
 
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isResolved])
   @@index([priority])
@@ -206,20 +249,20 @@ model PolicyViolation {
   occurredAt  DateTime        @default(now())
   evidenceUrl String?
 
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isResolved])
   @@index([platform])
 }
 
 model SyncLog {
-  id          String    @id @default(cuid())
-  platform    Platform
-  startedAt   DateTime  @default(now())
-  finishedAt  DateTime?
-  ordersSynced Int      @default(0)
-  success     Boolean   @default(false)
+  id           String    @id @default(cuid())
+  platform     Platform
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  ordersSynced Int       @default(0)
+  success      Boolean   @default(false)
   errorMessage String?
 
   // getLastSyncedLabel() runs on EVERY page (it feeds the top bar) as
@@ -233,17 +276,17 @@ model SyncLog {
 /// One TikTok Shop OAuth grant (from one merchant clicking "Authorize").
 /// A single grant's access/refresh token pair can cover multiple shops.
 model TikTokAuthorization {
-  id                   String       @id @default(cuid())
+  id                   String   @id @default(cuid())
   accessToken          String
   accessTokenExpireAt  DateTime
   refreshToken         String
   refreshTokenExpireAt DateTime
   sellerName           String?
 
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  shops                TikTokShop[]
+  shops TikTokShop[]
 }
 
 /// One employee login account. Plain per-account username/password, managed
@@ -258,12 +301,92 @@ model User {
   role         UserRole @default(STAFF)
   isActive     Boolean  @default(true)
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  // Profile picture, kept in the row rather than object storage: this is a
+  // staff-only tool with a handful of accounts, so a few hundred KB of bytea
+  // costs less than adding a storage client, a bucket and a service key.
+  // avatarUpdatedAt is what the <img> URL carries as ?v=, so a new upload
+  // busts the browser cache instead of showing the old picture. Never select
+  // avatarData alongside the other user fields — see src/lib/dal.ts.
+  avatarData      Bytes?
+  avatarMimeType  String?
+  avatarUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   activityLogs ActivityLog[]
 
+  chatMemberships ConversationParticipant[]
+  chatMessages    Message[]
+
   @@index([isActive])
+}
+
+enum ConversationKind {
+  /// The one room everybody is in. Exactly one row, id "team" — see
+  /// TEAM_CONVERSATION_ID in src/lib/chat.ts.
+  TEAM
+  /// A private thread between exactly two people.
+  DIRECT
+}
+
+/// A chat thread: either the shared team room or a two-person DM.
+model Conversation {
+  id   String           @id @default(cuid())
+  kind ConversationKind
+
+  /// DIRECT only: both user ids sorted and joined with "|". Unique, so two
+  /// people who happen to open a thread with each other at the same moment
+  /// can't end up with two parallel DM threads — the second insert loses the
+  /// race against this constraint instead of silently splitting the history.
+  dmKey String? @unique
+
+  /// Denormalised from the newest message so the conversation list can sort
+  /// and show a preview without touching the messages table per row.
+  lastMessageAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([lastMessageAt])
+}
+
+/// Someone's membership of a thread — and, the real reason this table exists,
+/// where their "read up to here" mark lives. Team-room rows are created the
+/// first time that person loads the chat rather than up front, so adding an
+/// employee doesn't mean backfilling rows.
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  lastReadAt DateTime?
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  /// SetNull rather than Cascade: deleting an employee shouldn't punch holes
+  /// in everyone else's conversation. senderName keeps the message readable
+  /// after the account is gone.
+  senderId   String?
+  sender     User?   @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  senderName String
+
+  body      String
+  createdAt DateTime @default(now())
+
+  /// The exact shape of every poll: "this thread, newer than this timestamp".
+  @@index([conversationId, createdAt])
 }
 
 /// One row per action a logged-in user took (login/logout, employee-account
@@ -288,11 +411,11 @@ model ActivityLog {
 /// A shop authorized under a TikTokAuthorization grant. shopCipher is
 /// required on every TikTok Shop Orders API call alongside the access token.
 model TikTokShop {
-  id              String              @id @default(cuid())
-  shopId          String              @unique
-  shopCipher      String
-  shopName        String?
-  region          String?
+  id         String  @id @default(cuid())
+  shopId     String  @unique
+  shopCipher String
+  shopName   String?
+  region     String?
 
   authorizationId String
   authorization   TikTokAuthorization @relation(fields: [authorizationId], references: [id], onDelete: Cascade)
@@ -300,11 +423,11 @@ model TikTokShop {
   /// Set once the one-time full order history backfill finishes for this shop.
   /// While null, the dashboard offers the backfill button; regular syncs only
   /// ever pull today's orders regardless of this field.
-  historyBackfilledAt DateTime?
+  historyBackfilledAt      DateTime?
   historyBackfillStartedAt DateTime?
 
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// Generic key/value store for small pieces of runtime config that aren't

@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nimbo · ระบบจัดการออเดอร์หลายช่องทาง",
+  title: "K Garden OMS · ระบบจัดการออเดอร์หลายช่องทาง",
   description: "แดชบอร์ดรวมออเดอร์จาก Shopee, TikTok Shop และ Lazada ไว้ในที่เดียว",
 };
 

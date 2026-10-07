@@ -33,9 +33,12 @@ export function startScheduler() {
     timezone: "Asia/Bangkok",
   });
 
-  // Automatic shipping-summary checkpoint sends (08:30/10:00/11:30/12:45,
-  // see shippingSummaryScheduler.ts) were turned off by request — staff
-  // send the LINE summary manually via the "ส่งเข้า LINE" button instead.
+  // No LINE cron here on purpose. Automatic shipping-summary sends
+  // (08:30/10:00/11:30/12:45) were turned off by request, and the machinery
+  // behind them was deleted on 2026-09-30 rather than left dormant: staff
+  // send the summary from the "ส่งเข้า LINE" button when they want it, so a
+  // scheduler that nothing calls is just a thing to misread later. It is in
+  // git history if it ever needs to come back.
 
   console.log(
     `[scheduler] started — every 5 min (${FREQUENT_LOOKBACK_DAYS}-day lookback) + daily 01:00 Asia/Bangkok (${DAILY_LOOKBACK_DAYS}-day lookback)`

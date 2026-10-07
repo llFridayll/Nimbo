@@ -2,6 +2,7 @@ import "server-only";
 import * as XLSX from "xlsx";
 import { OrderStatus, Platform } from "@prisma/client";
 import type { NormalizedOrder, NormalizedOrderItem } from "@/lib/platforms/types";
+import { parseShopeeCancellation } from "@/lib/platforms/cancellationFields";
 
 // Column headers from Shopee Seller Center's order-export file (verified
 // against a real "Order.all.<from>_<to>.xlsx" export, Sept 2026), looked up
@@ -28,6 +29,8 @@ const HEADER = {
   RECIPIENT_PHONE: "หมายเลขโทรศัพท์",
   PROVINCE: "จังหวัด",
   DISTRICT: "เขต/อำเภอ",
+  CANCEL_REASON: "เหตุผลในการยกเลิกคำสั่งซื้อ",
+  SHIP_TIME: "เวลาส่งสินค้า",
 } as const;
 
 // Only "ที่ต้องจัดส่ง" and "สำเร็จแล้ว" have been seen in a real export so
@@ -149,6 +152,11 @@ export function parseShopeeExport(buffer: Buffer, shopName: string): ShopeeImpor
 
     const totalAmount = Number(cell(first, HEADER.GRAND_TOTAL)) || items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
 
+    // Only read for cancelled orders: Shopee leaves this column populated on
+    // orders that were cancelled and then reinstated, and carrying that
+    // across would attach a cancellation reason to a live order.
+    const cancellation = status === OrderStatus.CANCELLED ? parseShopeeCancellation(cell(first, HEADER.CANCEL_REASON)) : {};
+
     orders.push({
       platform: Platform.SHOPEE,
       platformOrderId: orderId,
@@ -165,6 +173,8 @@ export function parseShopeeExport(buffer: Buffer, shopName: string): ShopeeImpor
       trackingNumber: cell(first, HEADER.TRACKING_NUMBER) || undefined,
       shopId: shopName,
       shopName,
+      ...cancellation,
+      shippedAt: parseShopeeDate(cell(first, HEADER.SHIP_TIME)) ?? undefined,
       items,
       rawPayload: orderRows,
     });

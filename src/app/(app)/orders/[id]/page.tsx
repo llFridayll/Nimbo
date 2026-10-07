@@ -7,9 +7,30 @@ import { PrintButton } from "@/components/PrintButton";
 import { OrderStatusEditor } from "@/components/OrderStatusEditor";
 import { OrderPrintSlip } from "@/components/OrderPrintSlip";
 import { getOrderDiscountInfo } from "@/lib/discountInfo";
+import { Platform } from "@prisma/client";
 import { fetchTikTokPackageStatus } from "@/lib/platforms/tiktok";
 
 export const dynamic = "force-dynamic";
+
+/** Hover text for a tracking number: when it counts as having arrived, which
+ * is the day the shipping summary files the order under.
+ *
+ * Worded per platform because the sources differ (see printedAt.ts). TikTok
+ * reports the label's creation time itself, exact wherever it was printed.
+ * Shopee and Lazada exports carry no such time, so theirs is when this system
+ * first saw the tracking number, or the carrier hand-off for an order that had
+ * already gone — calling that "เวลาพิมพ์ลาเบล" would be a lie. */
+function trackingPrintedTitle(printedAt: Date | null, platform: Platform): string | undefined {
+  if (!printedAt) return undefined;
+  const when = printedAt.toLocaleString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  return platform === Platform.TIKTOK
+    ? `สร้างใบลาเบลเมื่อ ${when} น. (เวลาจาก TikTok)`
+    : `ได้เลขพัสดุเมื่อ ${when} น. — เวลาที่ระบบเห็นเลขพัสดุครั้งแรกจากไฟล์ที่นำเข้า หรือเวลาที่ขนส่งรับของ`;
+}
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -230,7 +251,22 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                 <div className="flex justify-between">
                   <dt className="text-gray-500 dark:text-gray-400">Tracking</dt>
                   <dd className="text-right text-gray-800 dark:text-gray-200">
-                    {order.trackingNumber ? order.trackingNumber.split(" / ").map((code) => <div key={code}>{code}</div>) : "-"}
+                    {order.trackingNumber
+                      ? order.trackingNumber.split(" / ").map((code) => (
+                          // Hovering a tracking number shows when the label
+                          // for it was produced. A plain `title` rather than a
+                          // JS tooltip: this stays a server component, and the
+                          // native one is the only kind that also survives
+                          // printing and keyboard focus.
+                          <div
+                            key={code}
+                            title={trackingPrintedTitle(order.printedAt, order.platform)}
+                            className={order.printedAt ? "cursor-help underline decoration-dotted underline-offset-4" : undefined}
+                          >
+                            {code}
+                          </div>
+                        ))
+                      : "-"}
                   </dd>
                 </div>
                 <div className="flex justify-between">

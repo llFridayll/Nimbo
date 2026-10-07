@@ -35,6 +35,26 @@ export interface NormalizedOrder {
    * (defaults to false) since most orders and every platform's non-unpaid
    * statuses don't need to set this at all. */
   isUnpaid?: boolean;
+  /** Why the platform says this order was cancelled, and who cancelled it
+   * (BUYER / SELLER / SYSTEM). Only set for cancelled orders. All three
+   * platforms report the first two — TikTok over the API, Shopee and Lazada
+   * inside the order export itself (see cancellationFields.ts) — but neither
+   * file export carries a cancellation timestamp, so `cancelledAt` stays
+   * undefined for those. */
+  cancelReason?: string;
+  cancelInitiator?: string;
+  cancelledAt?: Date;
+  /** When the shipping label / tracking number was created, as the platform
+   * itself records it. The shipping summary files an order under the day its
+   * tracking number arrived, so this is preferred over every estimate in
+   * sync.ts. Only TikTok reports it (rts_time) — and it does so whether the
+   * label was printed here or in Seller Center. Shopee and Lazada exports
+   * carry no such time; see `shippedAt`. */
+  labelCreatedAt?: Date;
+  /** When the carrier took the parcel (Shopee's "เวลาส่งสินค้า"). Later than
+   * the label, but a real date for an order that has already gone out — far
+   * closer than the order date for filing historical orders. */
+  shippedAt?: Date;
   items: NormalizedOrderItem[];
   rawPayload: unknown;
 }

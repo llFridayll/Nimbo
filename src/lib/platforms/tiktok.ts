@@ -59,6 +59,15 @@ interface TikTokOrder {
   };
   payment?: { total_amount?: string; currency?: string };
   create_time: number;
+  /** Cancellation detail, present only once an order is cancelled.
+   * cancellation_initiator is BUYER / SELLER / SYSTEM; cancel_time is unix
+   * seconds like every other TikTok timestamp. */
+  cancel_reason?: string;
+  cancellation_initiator?: string;
+  cancel_time?: number;
+  /** Ready-To-Ship: when the label was created, in unix seconds. Recorded by
+   * TikTok regardless of where the label was printed. */
+  rts_time?: number;
   shipping_provider?: string;
   tracking_number?: string;
   delivery_option_name?: string;
@@ -133,6 +142,10 @@ function normalizeTikTokOrder(order: TikTokOrder, shop?: TikTokShopCredentials):
     shippingCarrier: order.shipping_provider,
     trackingNumber: order.tracking_number,
     shippingStatus: order.delivery_option_name,
+    cancelReason: order.cancel_reason,
+    cancelInitiator: order.cancellation_initiator,
+    cancelledAt: order.cancel_time ? new Date(order.cancel_time * 1000) : undefined,
+    labelCreatedAt: order.rts_time ? new Date(order.rts_time * 1000) : undefined,
     shopId: shop?.shopId,
     shopName: shop?.shopName ?? undefined,
     items,

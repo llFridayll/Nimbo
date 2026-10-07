@@ -275,3 +275,15 @@ export function MessageCircleIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/** An arrow curling back to its start — goods coming back to the shop. Used
+ * for the returns report, deliberately distinct from XCircleIcon (a
+ * cancellation, which never shipped). */
+export function ReturnIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="9 14 4 9 9 4" />
+      <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+    </svg>
+  );
+}

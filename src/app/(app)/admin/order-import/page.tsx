@@ -18,7 +18,7 @@ export default async function OrderImportPage() {
         <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
           ระบบรู้ว่าไฟล์เป็นของแพลตฟอร์ม/ร้านไหนจาก<strong>ชื่อไฟล์</strong> — ต้องขึ้นต้นด้วย <code>SP-{"{ชื่อร้าน}"}</code> (Shopee) หรือ{" "}
           <code>LZD-{"{ชื่อร้าน}"}</code> (Lazada) เช่น <code>SP-Kgarden-Order.all....xlsx</code> (ร้านที่รู้จัก: Kgarden, รั้วตราไก่,
-          Thai Euro Fence, Thai Euro Kool, River Floor — River Floor มีเฉพาะฝั่ง Shopee) — เปลี่ยนชื่อไฟล์ก่อนอัปโหลดถ้าชื่อยังไม่ตรงรูปแบบนี้
+          Thai Euro Fence, Thai Euro Kool, River Floor — River Floor มีเฉพาะฝั่ง Shopee) — เปลี่ยนชื่อไฟล์ก่อนอัปโหลดถ้าชื่อยังไม่ตรงรูปแบบนี้ — เลือกได้หลายไฟล์พร้อมกัน แต่ละไฟล์อ่านร้านจากชื่อตัวเอง
         </p>
       </div>
 
