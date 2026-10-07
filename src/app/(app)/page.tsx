@@ -26,10 +26,17 @@ function formatThb(value: number): string {
   return `฿${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
+/** Order-flow cards compare with yesterday up to this same time of day, so
+ * the caption says so — "จากเมื่อวาน" alone read as "vs all of yesterday". */
 function kpiCaption(changePct: number | null): string {
-  if (changePct === null) return "ยังไม่มีข้อมูลเทียบเมื่อวาน";
-  if (changePct === 0) return "เท่ากับเมื่อวาน";
-  return "จากเมื่อวาน";
+  if (changePct === null) return "เมื่อวานช่วงเดียวกันยังไม่มี";
+  if (changePct === 0) return "เท่ากับเมื่อวานช่วงเดียวกัน";
+  return "เทียบเมื่อวานช่วงเดียวกัน";
+}
+
+function shippedCaption(changePct: number | null): string {
+  if (changePct === null || changePct === 0) return "ได้เลขพัสดุในรอบส่งวันนี้";
+  return "เทียบรอบก่อนช่วงเดียวกัน";
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
@@ -80,7 +87,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           changePct={kpis.newOrders.changePct}
           direction={kpis.newOrders.direction}
           caption={kpiCaption(kpis.newOrders.changePct)}
-          href="/orders?days=today&status=NEW"
+          href="/orders?days=today"
         />
         <KpiCard
           label="รอจัดส่ง"
@@ -89,8 +96,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           iconBgClass="bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
           changePct={kpis.pendingShipment.changePct}
           direction={kpis.pendingShipment.direction}
-          caption={kpiCaption(kpis.pendingShipment.changePct)}
-          href="/orders?status=PENDING_SHIPMENT"
+          caption="ยังไม่มีเลขพัสดุ (ทุกวันรวมกัน)"
+          href="/orders/shipping-summary"
         />
         <KpiCard
           label="จัดส่งแล้ว"
@@ -99,8 +106,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           iconBgClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400"
           changePct={kpis.shipped.changePct}
           direction={kpis.shipped.direction}
-          caption={kpiCaption(kpis.shipped.changePct)}
-          href="/orders?days=today&status=SHIPPED"
+          caption={shippedCaption(kpis.shipped.changePct)}
+          href="/orders/shipping-summary"
         />
         <KpiCard
           label="ยกเลิก / คืนสินค้า"

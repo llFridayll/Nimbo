@@ -1,4 +1,4 @@
-import { OrderStatus, Platform } from "@prisma/client";
+import { OrderStatus, Platform, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { isMondayPromoWindow, type ShippingCutoffWindow } from "@/lib/dateUtils";
 import { getSkuAliasMap, resolveDisplaySku } from "@/lib/skuAlias";
@@ -34,7 +34,7 @@ const EXCLUDED_STATUSES: OrderStatus[] = [OrderStatus.CANCELLED, OrderStatus.REF
 // for "today's still-pending backlog" on every single day going forward —
 // this is exactly the bug that was inflating the pending count with
 // already-fulfilled orders.
-const NEEDS_SHIPPING_STATUSES: OrderStatus[] = [OrderStatus.NEW, OrderStatus.PENDING_SHIPMENT, OrderStatus.PROBLEM];
+export const NEEDS_SHIPPING_STATUSES: OrderStatus[] = [OrderStatus.NEW, OrderStatus.PENDING_SHIPMENT, OrderStatus.PROBLEM];
 
 /** One row per order-item — deliberately NOT merged across orders even when
  * two orders share the same SKU/carrier/shop, since each is a distinct
@@ -90,28 +90,41 @@ export interface ShippingSummaryResult {
   unpaidExcludedCount: number;
 }
 
-export async function getShippingSummary(window: ShippingCutoffWindow): Promise<ShippingSummaryResult> {
-  // Orders are bucketed by when they were actually PRINTED (tracking number
-  // first assigned — see printedAt in sync.ts), not by order date: a
-  // packing list only reflects orders once they have a label, and whichever
-  // day that happens on is the day they belong to. An order with no
-  // tracking number yet has no printedAt, and — only while `window` is the
-  // current (still-open) window — still counts as pending for "today" so it
-  // keeps rolling forward instead of vanishing, until it finally gets one.
-  const now = new Date();
+/** Which orders belong to a shipping window — the one definition of "ships
+ * on this day". Shared with the dashboard's shipped-today donut, which used
+ * to count from midnight instead and so dropped every order that got its
+ * tracking number after the previous day's cutoff: those are on today's
+ * packing list, but were missing from the chart.
+ *
+ * Orders are bucketed by when their tracking number arrived (printedAt —
+ * see printedAt.ts), not by order date: whichever day that happens on is
+ * the day they belong to. An order with no tracking number yet has no
+ * printedAt, and — only while `window` is the current (still-open) window —
+ * still counts as pending for "today" so it keeps rolling forward instead of
+ * vanishing, until it finally gets one. */
+export function shippingWindowWhere(
+  window: ShippingCutoffWindow,
+  { unpaid = false, now = new Date() }: { unpaid?: boolean; now?: Date } = {},
+): Prisma.OrderWhereInput {
   const isCurrentWindow = now >= window.from && now < window.to;
-  const windowOr = [
-    { printedAt: { gte: window.from, lt: window.to } },
-    ...(isCurrentWindow ? [{ printedAt: null, status: { in: NEEDS_SHIPPING_STATUSES } }] : []),
-  ];
+  return {
+    status: { notIn: EXCLUDED_STATUSES },
+    isUnpaid: unpaid,
+    OR: [
+      { printedAt: { gte: window.from, lt: window.to } },
+      ...(isCurrentWindow ? [{ printedAt: null, status: { in: NEEDS_SHIPPING_STATUSES } }] : []),
+    ],
+  };
+}
 
+export async function getShippingSummary(window: ShippingCutoffWindow): Promise<ShippingSummaryResult> {
   const [orders, unpaidExcludedCount, skuAliases] = await Promise.all([
     prisma.order.findMany({
-      where: { status: { notIn: EXCLUDED_STATUSES }, isUnpaid: false, OR: windowOr },
+      where: shippingWindowWhere(window),
       include: { items: true },
     }),
     prisma.order.count({
-      where: { status: { notIn: EXCLUDED_STATUSES }, isUnpaid: true, OR: windowOr },
+      where: shippingWindowWhere(window, { unpaid: true }),
     }),
     getSkuAliasMap(),
   ]);
