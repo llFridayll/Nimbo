@@ -1,4 +1,5 @@
 import { OrderStatus } from "@prisma/client";
+import { shippingCutoffWindowForDate } from "./dateUtils";
 
 // Which moment files an order under a shipping day. The rule, from the
 // warehouse: the day an order's tracking number arrives is the day it ships.
@@ -28,8 +29,9 @@ export interface PrintedAtInput {
  *     even over an existing value, because it can only be more right.
  *  2. A tracking number already on file → keep what was recorded then.
  *  3. A tracking number seen for the first time:
- *     - the carrier hand-off time if the export has one (Shopee), which is a
- *       real date for an order that has already gone out;
+ *     - the carrier hand-off time if the export has one (Shopee's
+ *       "เวลาส่งสินค้า", Lazada's updateTime/deliveredDate), filed under the
+ *       day it physically left — see shippedOnItsOwnDay;
  *     - otherwise `now` if the parcel hasn't left — the tracking number has
  *       only just reached us, and the order belongs to the batch being
  *       packed now;
@@ -40,6 +42,17 @@ export interface PrintedAtInput {
  * Never earlier than the order itself: a label can't precede its order, and
  * clock skew between platforms shouldn't file one on the day before.
  */
+/** A carrier hand-off time stands in for the label time, which must have
+ * come before it. A parcel that physically left on a given day belongs to
+ * that day's round even when the pickup itself was after the 14:00 cutoff —
+ * e.g. a Shopee parcel taken at 14:01 was labelled earlier that day and went
+ * out with that day's batch, not tomorrow's. So a hand-off after the cutoff
+ * is pulled back to just before it. */
+function shippedOnItsOwnDay(shippedAt: Date): Date {
+  const sameDay = shippingCutoffWindowForDate(shippedAt);
+  return shippedAt >= sameDay.to ? new Date(sameDay.to.getTime() - 1) : shippedAt;
+}
+
 export function printedAtFor(
   order: PrintedAtInput,
   existing: { trackingNumber: string | null } | null,
@@ -51,7 +64,7 @@ export function printedAtFor(
   if (order.labelCreatedAt) return clamp(order.labelCreatedAt);
   if (existing?.trackingNumber) return undefined;
 
-  if (order.shippedAt) return clamp(order.shippedAt);
+  if (order.shippedAt) return clamp(shippedOnItsOwnDay(order.shippedAt));
   if (NOT_YET_SHIPPED.includes(order.status) || existing) return clamp(now);
   return order.orderDate;
 }
