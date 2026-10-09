@@ -82,7 +82,12 @@ export async function getDashboardKpis(now: Date = new Date()): Promise<Dashboar
     // Tracking number arrived in the current shipping window — the
     // warehouse's "shipped today" (the day the tracking number arrives is
     // the day it ships). Same filter as the packing list and the donut.
-    prisma.order.count({ where: { AND: [shippingWindowWhere(window, { now }), { printedAt: { not: null } }] } }),
+    // (Explicit range rather than "has a printedAt": the window also pulls
+    // in labelled-but-unshipped orders carried over from earlier rounds,
+    // which didn't get their tracking number today.)
+    prisma.order.count({
+      where: { AND: [shippingWindowWhere(window, { now }), { printedAt: { gte: window.from, lt: window.to } }] },
+    }),
     prisma.order.count({
       where: { AND: [shippingWindowWhere(previous, { now }), { printedAt: { gte: previous.from, lt: previousSameTime } }] },
     }),

@@ -69,6 +69,10 @@ export interface ShippingSummarySkuLine {
    * LINE/Excel summaries (which already show the note inline) filter these
    * out to avoid double-counting the same physical roll. */
   isRedundantTieWireFreebie: boolean;
+  /** Tracking number arrived in an earlier round, but the platform still
+   * says the parcel hasn't left — rolled into this round so it isn't lost
+   * off the list (see CARRY_OVER_DAYS). */
+  carriedOver: boolean;
 }
 
 export interface ShippingSummaryCarrierGroup {
@@ -102,6 +106,18 @@ export interface ShippingSummaryResult {
  * printedAt, and — only while `window` is the current (still-open) window —
  * still counts as pending for "today" so it keeps rolling forward instead of
  * vanishing, until it finally gets one. */
+/** Statuses meaning the parcel still hasn't left, even though it has a
+ * tracking number. */
+const NOT_YET_SHIPPED: OrderStatus[] = [OrderStatus.NEW, OrderStatus.PENDING_SHIPMENT];
+
+/** How far back a labelled-but-not-shipped order is carried into the
+ * current round. Bounded because Shopee and Lazada only change status when a
+ * new file is imported: measured on 2026-10-08, 11 Lazada orders labelled in
+ * early September still read PENDING_SHIPMENT simply because no later export
+ * was imported, and an unbounded carry-over would put them on every packing
+ * list from now on. Three days covers a missed pickup and a weekend. */
+const CARRY_OVER_DAYS = 3;
+
 export function shippingWindowWhere(
   window: ShippingCutoffWindow,
   { unpaid = false, now = new Date() }: { unpaid?: boolean; now?: Date } = {},
@@ -112,7 +128,19 @@ export function shippingWindowWhere(
     isUnpaid: unpaid,
     OR: [
       { printedAt: { gte: window.from, lt: window.to } },
-      ...(isCurrentWindow ? [{ printedAt: null, status: { in: NEEDS_SHIPPING_STATUSES } }] : []),
+      ...(isCurrentWindow
+        ? [
+            { printedAt: null, status: { in: NEEDS_SHIPPING_STATUSES } },
+            // Labelled in an earlier round but not picked up yet. The rule is
+            // "the day the tracking number arrives is the day it ships"; when
+            // that didn't happen, it ships the next round instead of quietly
+            // dropping off every list.
+            {
+              printedAt: { gte: new Date(window.from.getTime() - CARRY_OVER_DAYS * 86_400_000), lt: window.from },
+              status: { in: NOT_YET_SHIPPED },
+            },
+          ]
+        : []),
     ],
   };
 }
@@ -159,6 +187,7 @@ export async function getShippingSummary(window: ShippingCutoffWindow): Promise<
         promoQuantity: isPromoOrder ? item.quantity : 0,
         trackingNumber: order.trackingNumber,
         isRedundantTieWireFreebie: hasQualifyingTieWireSku && !isTieWireSkuItself && isPlatformProvidedTieWireFreebie(item.productName),
+        carriedOver: order.printedAt !== null && order.printedAt < window.from,
       });
     }
   }

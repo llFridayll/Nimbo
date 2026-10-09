@@ -34,6 +34,8 @@ const HEADER = {
   CANCEL_REASON: "buyerFailedDeliveryReason",
   CANCEL_DETAIL: "buyerFailedDeliveryDetail",
   CANCEL_INITIATOR: "buyerFailedDeliveryReturnInitiator",
+  UPDATE_TIME: "updateTime",
+  DELIVERED_DATE: "deliveredDate",
 } as const;
 
 // Every status value seen in a real export, plus the couple of others
@@ -43,6 +45,11 @@ const HEADER = {
 const KNOWN_STATUS_MAP: Record<string, OrderStatus> = {
   pending: OrderStatus.NEW,
   unpaid: OrderStatus.NEW,
+  // "confirmed" here is the BUYER confirming receipt, which comes after
+  // delivery — every one of the 118 in the database on 2026-10-08 carried a
+  // deliveredDate. It used to map to PENDING_SHIPMENT, which put delivered
+  // orders back on packing lists. Only trusted as delivered when the row
+  // actually has a delivery date; see the override in parseLazadaExport.
   confirmed: OrderStatus.PENDING_SHIPMENT,
   ready_to_ship: OrderStatus.PENDING_SHIPMENT,
   packed: OrderStatus.PENDING_SHIPMENT,
@@ -139,7 +146,22 @@ export function parseLazadaExport(buffer: Buffer, shopName: string): LazadaImpor
   for (const [orderNumber, itemRows] of byOrderNumber) {
     const first = itemRows[0];
     const rawStatus = cell(first, HEADER.STATUS);
-    const { status, recognized } = mapLazadaStatus(rawStatus);
+    const mapped = mapLazadaStatus(rawStatus);
+    const { recognized } = mapped;
+    const deliveredAt = parseLazadaDate(cell(first, HEADER.DELIVERED_DATE)) ?? undefined;
+    const status =
+      rawStatus.trim().toLowerCase() === "confirmed" && deliveredAt ? OrderStatus.DELIVERED : mapped.status;
+
+    // The export has no "tracking number created" column, but updateTime is
+    // when the order last changed state — for an order sitting at
+    // ready_to_ship that is the moment its label was made, and for one at
+    // shipped it is the hand-off. A delivered order only gives an upper
+    // bound (deliveredDate), still far closer than the import time that was
+    // used before.
+    const updatedAt = parseLazadaDate(cell(first, HEADER.UPDATE_TIME)) ?? undefined;
+    const statusKey = rawStatus.trim().toLowerCase();
+    const labelCreatedAt = statusKey === "ready_to_ship" || statusKey === "packed" ? updatedAt : undefined;
+    const shippedAt = statusKey === "shipped" ? updatedAt : deliveredAt;
     if (!recognized && rawStatus) unrecognizedStatuses.add(rawStatus);
 
     const orderDate = parseLazadaDate(cell(first, HEADER.CREATE_TIME)) ?? new Date();
@@ -211,6 +233,8 @@ export function parseLazadaExport(buffer: Buffer, shopName: string): LazadaImpor
       shopId: shopName,
       shopName,
       ...cancellation,
+      labelCreatedAt,
+      shippedAt,
       items,
       rawPayload: itemRows,
     });

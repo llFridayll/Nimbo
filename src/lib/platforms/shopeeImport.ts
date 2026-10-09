@@ -47,6 +47,11 @@ const KNOWN_STATUS_MAP: Record<string, OrderStatus> = {
   จัดส่งแล้ว: OrderStatus.SHIPPED,
   สำเร็จแล้ว: OrderStatus.DELIVERED,
   จัดส่งสำเร็จ: OrderStatus.DELIVERED,
+  // Seen in real exports (Oct 2026) and previously falling through to
+  // PROBLEM — 16 delivered orders and 7 in-transit ones were sitting in the
+  // Problem Center and on packing lists as if they hadn't gone out.
+  จัดส่งสำเร็จแล้ว: OrderStatus.DELIVERED,
+  การจัดส่ง: OrderStatus.SHIPPED,
   ยกเลิก: OrderStatus.CANCELLED,
   ยกเลิกแล้ว: OrderStatus.CANCELLED,
   "คืนสินค้า/คืนเงิน": OrderStatus.REFUND_REQUESTED,
@@ -57,8 +62,15 @@ const KNOWN_STATUS_MAP: Record<string, OrderStatus> = {
 // Split from a plain lookup so "unrecognized" means "not a key in the map at
 // all" — a status that's deliberately mapped TO PROBLEM (none currently, but
 // keeps this consistent with lazadaImport.ts) still counts as recognized.
+// Statuses Shopee writes as a sentence with a date in it, so they can't be
+// exact-match keys: "ผู้ซื้อได้รับสินค้าแล้ว โปรดทราบว่าผู้ซื้อสามารถยื่นคำขอ
+// คืนเงิน/คืนสินค้าได้จนถึง 2026-10-10" — delivered, inside the buyer's
+// return window.
+const STATUS_PREFIX_MAP: [string, OrderStatus][] = [["ผู้ซื้อได้รับสินค้าแล้ว", OrderStatus.DELIVERED]];
+
 function mapShopeeStatus(raw: string): { status: OrderStatus; recognized: boolean } {
-  const status = KNOWN_STATUS_MAP[raw.trim()];
+  const trimmed = raw.trim();
+  const status = KNOWN_STATUS_MAP[trimmed] ?? STATUS_PREFIX_MAP.find(([prefix]) => trimmed.startsWith(prefix))?.[1];
   return status ? { status, recognized: true } : { status: OrderStatus.PROBLEM, recognized: false };
 }
 

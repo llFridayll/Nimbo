@@ -77,7 +77,7 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
       // group, not per individual line.
       const mergeGroups = groupLinesForDisplay(group.lines);
       const isGroupChecked = (mg: MergeGroup) =>
-        mg.lines.every((line) => resolveShippingChecklistChecked(checklistOverrides, checklistKey(line.orderId, line.sku), Boolean(line.trackingNumber)));
+        mg.lines.every((line) => resolveShippingChecklistChecked(checklistOverrides, checklistKey(line.orderId, line.sku), Boolean(line.trackingNumber) && !line.carriedOver));
       const pendingGroups = mergeGroups.filter((mg) => !isGroupChecked(mg));
       const shippedGroups = mergeGroups.filter((mg) => isGroupChecked(mg));
       const countLines = (groups: MergeGroup[]) => groups.reduce((n, mg) => n + mg.lines.length, 0);
@@ -216,7 +216,7 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
                                 const zebra = groupIdx % 2 === 1 ? "bg-gray-50/60 dark:bg-gray-800/30" : "";
                                 const displayRows = aggregateGroupLines(mg.lines);
                                 const isRowChecked = (row: DisplaySkuRow) =>
-                                  row.sourceLines.every((line) => resolveShippingChecklistChecked(checklistOverrides, checklistKey(line.orderId, line.sku), Boolean(line.trackingNumber)));
+                                  row.sourceLines.every((line) => resolveShippingChecklistChecked(checklistOverrides, checklistKey(line.orderId, line.sku), Boolean(line.trackingNumber) && !line.carriedOver));
                                 const isGroupChecked = displayRows.every(isRowChecked);
                                 const isMerged = mg.orderIds.length > 1;
                                 // Real sub-rows (one per aggregated SKU) with
@@ -262,6 +262,9 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
                                               mg.trackingNumber.split(" / ").map((code) => <div key={code}>{code}</div>)
                                             ) : (
                                               "-"
+                                            )}
+                                            {mg.carriedOver && (
+                                              <div className="mt-0.5 font-sans text-xs font-semibold text-amber-600 dark:text-amber-400">ค้างจากรอบก่อน</div>
                                             )}
                                           </td>
                                         </>
