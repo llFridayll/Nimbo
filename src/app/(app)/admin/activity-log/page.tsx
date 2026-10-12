@@ -24,6 +24,8 @@ const ACTION_ACCENT: Record<ActivityAction, string> = {
   ORDER_FILE_MANUAL_IMPORT: "bg-orange-500",
   CANCELLATION_FILE_IMPORT: "bg-orange-500",
   LINE_TARGET_RESET: "bg-red-500",
+  ANNOUNCEMENT_CREATE: "bg-amber-500",
+  ANNOUNCEMENT_CLOSE: "bg-emerald-500",
 };
 
 export default async function ActivityLogPage() {

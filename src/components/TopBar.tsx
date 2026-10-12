@@ -1,9 +1,11 @@
 // No "use client": the account menu that needed useState lived here and is
 // gone — the sidebar footer already carries the avatar, role and log-out
 // button. What's left is a plain GET form and links, so this stays on the
-// server and out of the client bundle. SyncButton brings its own boundary.
+// server and out of the client bundle. SyncButton and AnnouncementComposer
+// bring their own boundaries.
 import Link from "next/link";
 import { SyncButton } from "@/components/SyncButton";
+import { AnnouncementComposer } from "@/components/AnnouncementComposer";
 import { SearchIcon, BellIcon } from "@/components/icons";
 
 interface TopBarProps {
@@ -25,6 +27,7 @@ export function TopBar({ openProblemsCount, lastUpdatedLabel }: TopBarProps) {
       </form>
 
       <div className="flex shrink-0 items-center gap-4">
+        <AnnouncementComposer />
         <SyncButton lastUpdatedLabel={lastUpdatedLabel} />
 
         <Link

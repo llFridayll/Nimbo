@@ -319,6 +319,9 @@ model User {
   chatMemberships ConversationParticipant[]
   chatMessages    Message[]
 
+  announcementsPosted Announcement[] @relation("AnnouncementAuthor")
+  announcementsClosed Announcement[] @relation("AnnouncementCloser")
+
   @@index([isActive])
 }
 
@@ -467,4 +470,30 @@ model SkuAlias {
   rawSku     String   @unique
   displaySku String
   updatedAt  DateTime @updatedAt
+}
+
+enum AnnouncementLevel {
+  INFO
+  WARNING
+  URGENT
+}
+
+/// A notice one staff member posts for everyone else — pending work, a
+/// heads-up — shown as a strip under the top bar on every page until someone
+/// marks it done. Closed rows are kept so the announcements page can show who
+/// handled what.
+model Announcement {
+  id      String            @id @default(cuid())
+  message String
+  level   AnnouncementLevel @default(INFO)
+
+  createdById String?
+  createdBy   User?    @relation("AnnouncementAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  closedAt   DateTime?
+  closedById String?
+  closedBy   User?     @relation("AnnouncementCloser", fields: [closedById], references: [id], onDelete: SetNull)
+
+  @@index([closedAt, createdAt])
 }

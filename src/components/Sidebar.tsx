@@ -13,6 +13,7 @@ import {
   TruckIcon,
   PackageIcon,
   AlertTriangleIcon,
+  MegaphoneIcon,
   TrendingUpIcon,
   UploadIcon,
   UsersIcon,
@@ -44,6 +45,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/orders/shipping-summary", label: "สรุปออเดอร์จัดส่ง", icon: TruckIcon },
       { href: "/products", label: "สินค้า", icon: PackageIcon },
       { href: "/problems", label: "Problem Center", icon: AlertTriangleIcon },
+      { href: "/announcements", label: "ประกาศแจ้งเตือน", icon: MegaphoneIcon },
     ],
   },
   {
