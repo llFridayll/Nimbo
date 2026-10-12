@@ -16,20 +16,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   return (
-    <div className="md:h-screen md:overflow-hidden md:bg-slate-300 md:p-8 md:dark:bg-slate-950">
-      <div className="flex min-h-full bg-slate-50 dark:bg-slate-900 md:h-full md:overflow-hidden md:rounded-[2rem] md:border-2 md:border-gray-300 md:shadow-2xl md:dark:border-gray-700">
+    <div className="md:h-screen md:overflow-hidden">
+      <div className="flex min-h-full bg-slate-50 dark:bg-slate-900 md:h-full md:overflow-hidden">
         <Sidebar user={user} />
         <div className="flex min-w-0 flex-1 flex-col md:overflow-hidden">
           <TopBar
             openProblemsCount={openProblemsCount}
             lastUpdatedLabel={lastUpdatedLabel}
           />
-          <main className="mx-auto w-full min-w-0 max-w-7xl flex-1 px-6 pb-10 pt-20 md:overflow-y-auto md:px-8 md:pt-10 md:pb-10">
+          <main className="w-full min-w-0 flex-1 px-6 pb-10 pt-20 md:overflow-y-auto md:px-8 md:pt-10 md:pb-10">
             {children}
           </main>
         </div>
       </div>
-      {/* Outside the rounded shell so it floats over the whole viewport rather
+      {/* Outside the shell so it floats over the whole viewport rather
           than being clipped by the shell's overflow-hidden. */}
       <ChatWidget />
     </div>

@@ -51,6 +51,13 @@ export interface NormalizedOrder {
    * label was printed here or in Seller Center. Shopee and Lazada exports
    * carry no such time; see `shippedAt`. */
   labelCreatedAt?: Date;
+  /** A best guess at the label time from a field that is NOT a label
+   * timestamp — Lazada's updateTime while the order sits at ready_to_ship.
+   * Unlike labelCreatedAt it only counts the first time a tracking number is
+   * seen: updateTime moves whenever anything on the order changes, and
+   * letting it overwrite kept dragging an already-shipped order onto each
+   * new day's packing list. */
+  estimatedLabelAt?: Date;
   /** When the carrier took the parcel (Shopee's "เวลาส่งสินค้า"). Later than
    * the label, but a real date for an order that has already gone out — far
    * closer than the order date for filing historical orders. */
