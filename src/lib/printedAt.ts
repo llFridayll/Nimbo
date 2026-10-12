@@ -16,6 +16,7 @@ export interface PrintedAtInput {
   orderDate: Date;
   trackingNumber?: string | null;
   labelCreatedAt?: Date;
+  estimatedLabelAt?: Date;
   shippedAt?: Date;
 }
 
@@ -32,6 +33,8 @@ export interface PrintedAtInput {
  *     - the carrier hand-off time if the export has one (Shopee's
  *       "เวลาส่งสินค้า", Lazada's updateTime/deliveredDate), filed under the
  *       day it physically left — see shippedOnItsOwnDay;
+ *     - otherwise an estimated label time (Lazada's updateTime at
+ *       ready_to_ship) — first sighting only, never overwriting;
  *     - otherwise `now` if the parcel hasn't left — the tracking number has
  *       only just reached us, and the order belongs to the batch being
  *       packed now;
@@ -65,6 +68,7 @@ export function printedAtFor(
   if (existing?.trackingNumber) return undefined;
 
   if (order.shippedAt) return clamp(shippedOnItsOwnDay(order.shippedAt));
+  if (order.estimatedLabelAt) return clamp(order.estimatedLabelAt);
   if (NOT_YET_SHIPPED.includes(order.status) || existing) return clamp(now);
   return order.orderDate;
 }

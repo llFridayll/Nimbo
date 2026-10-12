@@ -41,12 +41,36 @@ export async function upsertOrder(order: NormalizedOrder) {
   // printedAt.ts for which source wins when.
   const printedAt = printedAtFor(order, existing, new Date());
 
+  // Decided before the write so the order is saved with its final status in
+  // one go. Writing the platform's status first and flipping to PROBLEM
+  // afterwards made every sync of a flagged order bounce PROBLEM → platform
+  // status → PROBLEM, logging a fresh history row each time.
+  const problem = detectProblem(order);
+  const existingTicket = existing
+    ? await prisma.problemTicket.findUnique({ where: { orderId: existing.id } })
+    : null;
+  // Staff already resolved this exact issue (applyOrderStatusChange in
+  // orderActions.ts sets isResolved on a manual status change) — the
+  // platform's underlying condition (e.g. still >2 days late) often hasn't
+  // changed by the very next sync, so re-detecting the SAME problem type
+  // must not silently reopen it or flip the order back to PROBLEM; that
+  // previously made a resolved ticket disappear from Problem Center while
+  // the order stayed stuck on PROBLEM with no UI surface explaining why. A
+  // genuinely different problem type after resolution is still treated as
+  // new and reopens it below.
+  const alreadyResolvedSameProblem = Boolean(
+    problem && existingTicket?.isResolved && existingTicket.type === problem.type,
+  );
+  const openTicket = problem !== null && !alreadyResolvedSameProblem;
+  const status =
+    openTicket && order.status !== OrderStatus.REFUND_REQUESTED ? OrderStatus.PROBLEM : order.status;
+
   const saved = await prisma.order.upsert({
     where: { platform_platformOrderId: { platform: order.platform, platformOrderId: order.platformOrderId } },
     create: {
       platform: order.platform,
       platformOrderId: order.platformOrderId,
-      status: order.status,
+      status,
       buyerName: order.buyerName,
       buyerPhone: order.buyerPhone,
       buyerUsername: order.buyerUsername,
@@ -79,7 +103,7 @@ export async function upsertOrder(order: NormalizedOrder) {
       },
     },
     update: {
-      status: order.status,
+      status,
       buyerName: order.buyerName,
       buyerPhone: order.buyerPhone,
       buyerUsername: order.buyerUsername,
@@ -105,44 +129,30 @@ export async function upsertOrder(order: NormalizedOrder) {
     },
   });
 
-  if (!existing || existing.status !== order.status) {
+  // A new order already got its first row (at orderDate) in the create
+  // above; only log again when the status actually moved.
+  const previousStatus = existing ? existing.status : order.status;
+  if (previousStatus !== status) {
     await prisma.orderStatusHistory.create({
-      data: { orderId: saved.id, status: order.status, occurredAt: new Date() },
+      data: { orderId: saved.id, status, occurredAt: new Date() },
     });
   }
 
-  const problem = detectProblem(order);
-  if (problem) {
-    const existingTicket = await prisma.problemTicket.findUnique({ where: { orderId: saved.id } });
-    // Staff already resolved this exact issue (applyOrderStatusChange in
-    // orderActions.ts sets isResolved on a manual status change) — the
-    // platform's underlying condition (e.g. still >2 days late) often hasn't
-    // changed by the very next sync, so re-detecting the SAME problem type
-    // must not silently reopen it or flip the order back to PROBLEM; that
-    // previously made a resolved ticket disappear from Problem Center while
-    // the order stayed stuck on PROBLEM with no UI surface explaining why. A
-    // genuinely different problem type after resolution is still treated as
-    // new and reopens it below.
-    const alreadyResolvedSameProblem = existingTicket?.isResolved && existingTicket.type === problem.type;
-    if (!alreadyResolvedSameProblem) {
-      await prisma.problemTicket.upsert({
-        where: { orderId: saved.id },
-        create: {
-          orderId: saved.id,
-          type: problem.type,
-          description: problem.description,
-        },
-        update: {
-          type: problem.type,
-          description: problem.description,
-          isResolved: false,
-          resolvedAt: null,
-        },
-      });
-      if (saved.status !== OrderStatus.PROBLEM && order.status !== OrderStatus.REFUND_REQUESTED) {
-        await prisma.order.update({ where: { id: saved.id }, data: { status: OrderStatus.PROBLEM } });
-      }
-    }
+  if (problem && openTicket) {
+    await prisma.problemTicket.upsert({
+      where: { orderId: saved.id },
+      create: {
+        orderId: saved.id,
+        type: problem.type,
+        description: problem.description,
+      },
+      update: {
+        type: problem.type,
+        description: problem.description,
+        isResolved: false,
+        resolvedAt: null,
+      },
+    });
   }
 
   return saved;

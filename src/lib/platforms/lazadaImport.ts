@@ -160,7 +160,8 @@ export function parseLazadaExport(buffer: Buffer, shopName: string): LazadaImpor
     // used before.
     const updatedAt = parseLazadaDate(cell(first, HEADER.UPDATE_TIME)) ?? undefined;
     const statusKey = rawStatus.trim().toLowerCase();
-    const labelCreatedAt = statusKey === "ready_to_ship" || statusKey === "packed" ? updatedAt : undefined;
+    // An estimate, not a label timestamp: see NormalizedOrder.estimatedLabelAt.
+    const estimatedLabelAt = statusKey === "ready_to_ship" || statusKey === "packed" ? updatedAt : undefined;
     const shippedAt = statusKey === "shipped" ? updatedAt : deliveredAt;
     if (!recognized && rawStatus) unrecognizedStatuses.add(rawStatus);
 
@@ -233,7 +234,7 @@ export function parseLazadaExport(buffer: Buffer, shopName: string): LazadaImpor
       shopId: shopName,
       shopName,
       ...cancellation,
-      labelCreatedAt,
+      estimatedLabelAt,
       shippedAt,
       items,
       rawPayload: itemRows,
