@@ -106,6 +106,8 @@ export const activityActionLabel: Record<ActivityAction, string> = {
   ORDER_FILE_MANUAL_IMPORT: "นำเข้าออเดอร์ด้วยไฟล์ (Shopee/Lazada)",
   CANCELLATION_FILE_IMPORT: "นำเข้ารายการยกเลิกด้วยไฟล์",
   LINE_TARGET_RESET: "รีเซ็ตกลุ่ม LINE ปลายทาง",
+  ANNOUNCEMENT_CREATE: "ลงประกาศแจ้งเตือน",
+  ANNOUNCEMENT_CLOSE: "ปิดประกาศแจ้งเตือน",
 };
 
 // Only two (package_status, package_sub_status) pairs have actually been

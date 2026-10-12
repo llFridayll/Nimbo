@@ -1,18 +1,21 @@
+import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { ChatWidget } from "@/components/ChatWidget";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
 import { getCurrentUser } from "@/lib/dal";
 import { getOpenProblemsCount, getLastSyncedLabel } from "@/lib/dashboardStats";
+import { getOpenAnnouncements } from "@/lib/announcements";
 
 // Every real app page lives under this (app) route group so this layout can
 // both gate them behind login (getCurrentUser() redirects to /login if
 // there's no valid, still-active account) and render the shared sidebar shell
 // — /login itself sits outside the group with its own minimal layout.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [user, openProblemsCount, lastUpdatedLabel] = await Promise.all([
+  const [user, openProblemsCount, lastUpdatedLabel, announcements] = await Promise.all([
     getCurrentUser(),
     getOpenProblemsCount(),
     getLastSyncedLabel(),
+    getOpenAnnouncements(),
   ]);
 
   return (
@@ -25,6 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             lastUpdatedLabel={lastUpdatedLabel}
           />
           <main className="w-full min-w-0 flex-1 px-6 pb-10 pt-20 md:overflow-y-auto md:px-8 md:pt-10 md:pb-10">
+            <AnnouncementBar initial={announcements} />
             {children}
           </main>
         </div>

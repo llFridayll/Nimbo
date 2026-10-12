@@ -23,7 +23,9 @@ export type ActivityAction =
   | "LINE_SUMMARY_SENT"
   | "ORDER_FILE_MANUAL_IMPORT"
   | "CANCELLATION_FILE_IMPORT"
-  | "LINE_TARGET_RESET";
+  | "LINE_TARGET_RESET"
+  | "ANNOUNCEMENT_CREATE"
+  | "ANNOUNCEMENT_CLOSE";
 
 export async function logActivity(params: { userId: string; username: string; action: ActivityAction; detail?: string }) {
   // Best-effort — a logging failure should never break the actual user
