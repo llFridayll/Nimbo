@@ -1,12 +1,10 @@
 import type { ChannelStatus } from "@/lib/dashboardStats";
-import { platformColor } from "@/lib/labels";
+import { PlatformLogo } from "@/components/PlatformLogo";
 
 export function ChannelStatusCard({ channel }: { channel: ChannelStatus }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 shadow-sm">
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${platformColor[channel.platform]}`}>
-        {channel.label.charAt(0)}
-      </span>
+      <PlatformLogo platform={channel.platform} className="h-9 w-9" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{channel.label}</p>
         <p className={`text-xs font-medium ${channel.connected ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-gray-500"}`}>

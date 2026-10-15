@@ -118,6 +118,17 @@ const NOT_YET_SHIPPED: OrderStatus[] = [OrderStatus.NEW, OrderStatus.PENDING_SHI
  * list from now on. Three days covers a missed pickup and a weekend. */
 const CARRY_OVER_DAYS = 3;
 
+/** A Shopee or Lazada order is only carried over when a file imported this
+ * long after the round opened still says it hasn't shipped — i.e. from about
+ * 08:00 the next morning. Those statuses only change when a file is imported,
+ * and a file pulled right after printing labels (or the "ที่ต้องจัดส่ง" tab,
+ * which never lists shipped orders) leaves every labelled order reading "to
+ * ship" for good. Measured 2026-10-14 and 10-15: five Shopee orders each day
+ * were carried onto the next list although they had gone out, their last
+ * import taken minutes after the 14:00 cutoff, before the carrier came.
+ * TikTok syncs status from its API, so its orders carry over as before. */
+const FILE_STATUS_FRESH_AFTER_MS = 18 * 60 * 60 * 1000;
+
 export function shippingWindowWhere(
   window: ShippingCutoffWindow,
   { unpaid = false, now = new Date() }: { unpaid?: boolean; now?: Date } = {},
@@ -138,6 +149,10 @@ export function shippingWindowWhere(
             {
               printedAt: { gte: new Date(window.from.getTime() - CARRY_OVER_DAYS * 86_400_000), lt: window.from },
               status: { in: NOT_YET_SHIPPED },
+              OR: [
+                { platform: Platform.TIKTOK },
+                { updatedAt: { gte: new Date(window.from.getTime() + FILE_STATUS_FRESH_AFTER_MS) } },
+              ],
             },
           ]
         : []),

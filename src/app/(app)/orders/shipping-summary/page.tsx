@@ -5,6 +5,7 @@ import { groupLinesForDisplay, aggregateGroupLines, type MergeGroup, type Displa
 import { getShippingChecklistOverrides, resolveShippingChecklistChecked, checklistKey } from "@/lib/shippingChecklist";
 import { getCurrentUser } from "@/lib/dal";
 import { platformLabel } from "@/lib/labels";
+import { PlatformLogo } from "@/components/PlatformLogo";
 import { PrintButton } from "@/components/PrintButton";
 import { SendLineSummaryButton } from "@/components/SendLineSummaryButton";
 import { ExportSummaryButton } from "@/components/ExportSummaryButton";
@@ -240,7 +241,10 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
                                           </td>
                                           <td className={TD_CLASS} rowSpan={displayRows.length}>
                                             <div>{mg.shop}</div>
-                                            <div className="text-xs text-gray-400 dark:text-gray-500">({platformLabel[mg.platform]})</div>
+                                            <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+                                              <PlatformLogo platform={mg.platform} className="h-3.5 w-3.5" />
+                                              {platformLabel[mg.platform]}
+                                            </div>
                                           </td>
                                           <td className={`${TD_CLASS} whitespace-nowrap`} rowSpan={displayRows.length}>
                                             {mg.orderIds.map((orderId, i) => (

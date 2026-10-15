@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { RecentOrderRow } from "@/lib/dashboardStats";
-import { platformColor } from "@/lib/labels";
+import { PlatformLogo } from "@/components/PlatformLogo";
 import { StatusBadge } from "@/components/Badges";
 import { OrderRowMenu } from "@/components/OrderRowMenu";
 
@@ -30,9 +30,7 @@ export function RecentOrdersTable({ orders }: { orders: RecentOrderRow[] }) {
           {orders.map((order) => (
             <tr key={order.id} className="border-b border-gray-50 dark:border-gray-800/60 last:border-0">
               <td className="py-2.5 pr-3">
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white ${platformColor[order.platform]}`}>
-                  {order.platform.charAt(0)}
-                </span>
+                <PlatformLogo platform={order.platform} className="h-6 w-6" />
               </td>
               <td className="py-2.5 pr-3 font-medium text-gray-800 dark:text-gray-200">#{order.platformOrderId}</td>
               <td className="py-2.5 pr-3 text-gray-600 dark:text-gray-300">{order.buyerNameMasked}</td>
