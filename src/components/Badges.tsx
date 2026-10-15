@@ -1,5 +1,6 @@
 import { OrderStatus, Platform } from "@prisma/client";
-import { statusLabel, statusColor, platformLabel, platformColor } from "@/lib/labels";
+import { statusLabel, statusColor, platformLabel } from "@/lib/labels";
+import { PlatformLogo } from "@/components/PlatformLogo";
 
 export function StatusBadge({ status }: { status: OrderStatus }) {
   return (
@@ -11,8 +12,8 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
 
 export function PlatformBadge({ platform }: { platform: Platform }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 dark:bg-gray-700 px-2.5 py-0.5 text-xs font-medium text-gray-700 dark:text-gray-300">
-      <span className={`h-1.5 w-1.5 rounded-full ${platformColor[platform]}`} />
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 dark:bg-gray-700 py-0.5 pl-1 pr-2.5 text-xs font-medium text-gray-700 dark:text-gray-300">
+      <PlatformLogo platform={platform} className="h-4 w-4" />
       {platformLabel[platform]}
     </span>
   );
