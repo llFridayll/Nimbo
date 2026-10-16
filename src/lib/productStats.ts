@@ -1,8 +1,14 @@
-import { OrderStatus, Platform, Prisma } from "@prisma/client";
+import { Platform, Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import { currentShippingCutoffWindow } from "./dateUtils";
+import { NEEDS_SHIPPING_STATUSES, shippingWindowWhere } from "./shippingSummary";
+import { getSkuAliasMap, resolveDisplaySku } from "./skuAlias";
 
 export interface ProductSummary {
   sku: string;
+  /** The name set for this SKU on the packing list (SkuAlias), or null when
+   * it still shows the platform's own SKU. */
+  displaySku: string | null;
   productName: string;
   imageUrl: string | null;
   platforms: Platform[];
@@ -28,8 +34,19 @@ export interface ProductSummary {
  * Prisma's `contains` without `mode: "insensitive"` is case-sensitive on
  * Postgres, and likewise does not escape % or _ in the search term. */
 export async function listProductSummaries({ q, platform }: { q?: string; platform?: Platform }): Promise<ProductSummary[]> {
+  const aliases = await getSkuAliasMap();
+  // Searching for a name set on the packing list should find the platform
+  // SKUs behind it too — that name is what staff now call the product.
+  const aliasMatches = q ? [...aliases].filter(([, display]) => display.includes(q)).map(([raw]) => raw) : [];
+
   const conditions: Prisma.Sql[] = [];
-  if (q) conditions.push(Prisma.sql`(i."sku" LIKE ${`%${q}%`} OR i."productName" LIKE ${`%${q}%`})`);
+  if (q) {
+    conditions.push(
+      aliasMatches.length > 0
+        ? Prisma.sql`(i."sku" LIKE ${`%${q}%`} OR i."productName" LIKE ${`%${q}%`} OR i."sku" IN (${Prisma.join(aliasMatches)}))`
+        : Prisma.sql`(i."sku" LIKE ${`%${q}%`} OR i."productName" LIKE ${`%${q}%`})`,
+    );
+  }
   if (platform) conditions.push(Prisma.sql`o."platform" = ${platform}::"Platform"`);
   const where = conditions.length > 0 ? Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}` : Prisma.empty;
 
@@ -79,7 +96,7 @@ export async function listProductSummaries({ q, platform }: { q?: string; platfo
     ORDER BY a."lastSoldAt" DESC
   `;
 
-  return rows.map((row) => ({ ...row, platforms: row.platforms as Platform[] }));
+  return rows.map((row) => ({ ...row, displaySku: aliases.get(row.sku) ?? null, platforms: row.platforms as Platform[] }));
 }
 
 export interface PendingShipmentProduct {
@@ -91,17 +108,28 @@ export interface PendingShipmentProduct {
 }
 
 /** Packing-list view for the dashboard's "products awaiting shipment" panel —
- * every OrderItem belonging to a still-PENDING_SHIPMENT order, summed by SKU,
- * so warehouse staff see "how many of each item to pack" rather than a raw
- * order list. Same JS-side group-by approach as listProductSummaries above. */
-export async function getPendingShipmentProducts(): Promise<PendingShipmentProduct[]> {
-  const items = await prisma.orderItem.findMany({
-    where: { order: { status: OrderStatus.PENDING_SHIPMENT } },
-    select: { sku: true, productName: true, quantity: true, imageUrl: true, orderId: true },
-  });
+ * the items on today's packing list (/orders/shipping-summary, which the
+ * panel links to) whose order hasn't left yet, summed by display SKU so a
+ * product sold under two platform SKUs counts once. Not every
+ * PENDING_SHIPMENT order: Shopee and Lazada statuses only move on a file
+ * import, so that also counted long-gone parcels and never matched the
+ * packing list. */
+export async function getPendingShipmentProducts(now: Date = new Date()): Promise<PendingShipmentProduct[]> {
+  const [items, aliases] = await Promise.all([
+    prisma.orderItem.findMany({
+      where: {
+        order: {
+          AND: [shippingWindowWhere(currentShippingCutoffWindow(now), { now }), { status: { in: NEEDS_SHIPPING_STATUSES } }],
+        },
+      },
+      select: { sku: true, productName: true, quantity: true, imageUrl: true, orderId: true },
+    }),
+    getSkuAliasMap(),
+  ]);
 
   const bySku = new Map<string, PendingShipmentProduct & { orderIds: Set<string> }>();
-  for (const item of items) {
+  for (const raw of items) {
+    const item = { ...raw, sku: resolveDisplaySku(aliases, raw.sku) };
     const existing = bySku.get(item.sku);
     if (!existing) {
       bySku.set(item.sku, {
