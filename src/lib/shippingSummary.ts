@@ -14,7 +14,15 @@ const UNKNOWN_SHOP_LABEL = "ไม่ระบุร้าน";
 const CARRIER_NORMALIZATION: { pattern: RegExp; label: string }[] = [
   { pattern: /flash/i, label: "Flash Express" },
   { pattern: /best/i, label: "BEST Express" },
+  // Shopee's own courier: "Express Delivery (SPX)" and "Express Delivery
+  // (SHP Food)" are SPX Express riders too, picked up in the same round.
+  { pattern: /\bSPX\b|SHP Food|Express Delivery/i, label: "SPX Express" },
 ];
+
+/** Shopee's same-day riders ("Express Delivery (SPX)", "Express Delivery
+ * (SHP Food)"): packed with the SPX Express pile, but flagged on the packing
+ * list so they go out first. */
+const EXPRESS_CARRIER = /Express Delivery|SHP Food/i;
 
 function normalizeCarrierName(raw: string): string {
   const match = CARRIER_NORMALIZATION.find((rule) => rule.pattern.test(raw));
@@ -73,6 +81,8 @@ export interface ShippingSummarySkuLine {
    * says the parcel hasn't left — rolled into this round so it isn't lost
    * off the list (see CARRY_OVER_DAYS). */
   carriedOver: boolean;
+  /** Booked as an express (same-day) delivery — see EXPRESS_CARRIER. */
+  isExpress: boolean;
 }
 
 export interface ShippingSummaryCarrierGroup {
@@ -203,6 +213,7 @@ export async function getShippingSummary(window: ShippingCutoffWindow): Promise<
         trackingNumber: order.trackingNumber,
         isRedundantTieWireFreebie: hasQualifyingTieWireSku && !isTieWireSkuItself && isPlatformProvidedTieWireFreebie(item.productName),
         carriedOver: order.printedAt !== null && order.printedAt < window.from,
+        isExpress: EXPRESS_CARRIER.test(order.shippingCarrier ?? ""),
       });
     }
   }
