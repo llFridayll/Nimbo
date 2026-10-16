@@ -174,10 +174,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              สินค้าที่ต้องส่ง{" "}
+              สินค้าที่ต้องส่งวันนี้{" "}
               <span className="font-normal text-gray-400 dark:text-gray-500">(ทั้งหมด {pendingShipmentProducts.length.toLocaleString()} รายการ)</span>
             </h2>
-            <Link href="/orders?status=PENDING_SHIPMENT" className="text-xs font-medium text-primary hover:underline">
+            <Link href="/orders/shipping-summary?view=pending" className="text-xs font-medium text-primary hover:underline">
               ดูทั้งหมด →
             </Link>
           </div>

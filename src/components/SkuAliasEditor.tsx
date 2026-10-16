@@ -7,13 +7,15 @@ interface SkuAliasEditorProps {
   rawSku: string;
   displaySku: string;
   className?: string;
+  /** Shown instead of displaySku when it's empty (no name set yet). */
+  placeholder?: string;
 }
 
 /** Click-to-edit SKU name — renames how `rawSku` displays everywhere in the
  * shipping summary (every row sharing that raw SKU, past and future orders
  * included), since the platform's own seller_sku often doesn't match what
  * the shop actually calls the product. */
-export function SkuAliasEditor({ rawSku, displaySku, className }: SkuAliasEditorProps) {
+export function SkuAliasEditor({ rawSku, displaySku, className, placeholder }: SkuAliasEditorProps) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(displaySku);
   const [pending, startTransition] = useTransition();
@@ -23,13 +25,13 @@ export function SkuAliasEditor({ rawSku, displaySku, className }: SkuAliasEditor
       <button
         type="button"
         onClick={() => {
-          setValue(displaySku);
+          setValue(displaySku || rawSku);
           setEditing(true);
         }}
         title="แก้ไขชื่อ SKU (มีผลกับทุกออเดอร์ที่ใช้ SKU นี้)"
         className={`group inline-flex items-center gap-1 text-left ${className ?? ""}`}
       >
-        <span>{displaySku}</span>
+        {displaySku ? <span>{displaySku}</span> : <span className="text-gray-400 dark:text-gray-500">{placeholder ?? rawSku}</span>}
         <span className="text-[10px] opacity-0 group-hover:opacity-100">✏️</span>
       </button>
     );

@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/dal";
 import { revalidatePath } from "next/cache";
 
 /** Renames how `rawSku` (the platform's own seller_sku) displays across the
- * shipping summary, LINE messages, and Excel export — an empty value or one
+ * shipping summary, LINE messages, Excel export and products page — an empty value or one
  * matching rawSku itself resets back to showing the platform's raw name.
  * Admin-only (see SkuAliasEditor: staff don't even get the edit control). */
 export async function setSkuAlias(rawSku: string, displaySku: string): Promise<void> {
@@ -23,4 +23,5 @@ export async function setSkuAlias(rawSku: string, displaySku: string): Promise<v
   }
 
   revalidatePath("/orders/shipping-summary");
+  revalidatePath("/products");
 }

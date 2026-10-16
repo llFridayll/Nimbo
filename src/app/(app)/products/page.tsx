@@ -3,6 +3,8 @@ import { Platform } from "@prisma/client";
 import { listProductSummaries } from "@/lib/productStats";
 import { PlatformBadge } from "@/components/Badges";
 import { ProductsFilterBar } from "@/components/ProductsFilterBar";
+import { SkuAliasEditor } from "@/components/SkuAliasEditor";
+import { getCurrentUser } from "@/lib/dal";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,10 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   const platformParam = params.platform ?? "";
   const platform = Object.values(Platform).includes(platformParam as Platform) ? (platformParam as Platform) : undefined;
 
-  const products = await listProductSummaries({ q: q || undefined, platform });
+  const [products, currentUser] = await Promise.all([listProductSummaries({ q: q || undefined, platform }), getCurrentUser()]);
+  // Same rule as the packing list: the name shows everywhere staff pack from,
+  // so only an admin can change it.
+  const canEditSku = currentUser.role === "ADMIN";
 
   return (
     <div className="space-y-6">
@@ -36,6 +41,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
               <thead className="bg-gray-50 dark:bg-gray-800/60 text-left text-xs text-gray-500 dark:text-gray-400">
                 <tr>
                   <th className="px-4 py-2 font-medium">SKU</th>
+                  <th className="px-4 py-2 font-medium" title="ชื่อที่ใช้ในใบสรุปจัดส่ง ข้อความ LINE และไฟล์ Excel">ชื่อในระบบ</th>
                   <th className="px-4 py-2 font-medium">ชื่อสินค้า</th>
                   <th className="px-4 py-2 font-medium">ช่องทางขาย</th>
                   <th className="px-4 py-2 font-medium">ขายไปแล้ว</th>
@@ -47,6 +53,13 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
                 {products.map((p) => (
                   <tr key={p.sku} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                     <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{p.sku}</td>
+                    <td className="min-w-[12rem] px-4 py-3 text-gray-800 dark:text-gray-200">
+                      {canEditSku ? (
+                        <SkuAliasEditor rawSku={p.sku} displaySku={p.displaySku ?? ""} placeholder="+ ตั้งชื่อ" className="text-sm" />
+                      ) : (
+                        (p.displaySku ?? <span className="text-gray-400 dark:text-gray-500">—</span>)
+                      )}
+                    </td>
                     <td className="max-w-xs truncate px-4 py-3 text-gray-600 dark:text-gray-400" title={p.productName}>
                       {p.productName}
                     </td>
