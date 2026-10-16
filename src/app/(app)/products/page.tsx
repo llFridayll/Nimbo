@@ -4,6 +4,8 @@ import { listProductSummaries, type ProductSort } from "@/lib/productStats";
 import { PlatformBadge } from "@/components/Badges";
 import { ProductsFilterBar } from "@/components/ProductsFilterBar";
 import { SkuAliasEditor } from "@/components/SkuAliasEditor";
+import { HoverDetails } from "@/components/HoverDetails";
+import { platformLabel } from "@/lib/labels";
 import { getCurrentUser } from "@/lib/dal";
 
 export const dynamic = "force-dynamic";
@@ -57,7 +59,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-800/60 text-left text-xs text-gray-500 dark:text-gray-400">
+              <thead className="whitespace-nowrap bg-gray-50 dark:bg-gray-800/60 text-left text-xs text-gray-500 dark:text-gray-400">
                 <tr>
                   <th className="px-4 py-2 font-medium">SKU</th>
                   <th className="px-4 py-2 font-medium" title="ชื่อที่ใช้ในใบสรุปจัดส่ง ข้อความ LINE และไฟล์ Excel">ชื่อในระบบ</th>
@@ -83,8 +85,34 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
                         (p.displaySku ?? <span className="text-gray-400 dark:text-gray-500">—</span>)
                       )}
                     </td>
-                    <td className="max-w-xs truncate px-4 py-3 text-gray-600 dark:text-gray-400" title={p.productName}>
-                      {p.productName}
+                    <td className="max-w-xs px-4 py-3 text-gray-600 dark:text-gray-400">
+                      <HoverDetails
+                        className="truncate"
+                        details={
+                          <div className="space-y-2">
+                            <p className="font-medium leading-snug text-gray-900 dark:text-gray-100">{p.productName}</p>
+                            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+                              <dt className="text-gray-500 dark:text-gray-400">SKU</dt>
+                              <dd className="break-words">{p.sku}</dd>
+                              <dt className="text-gray-500 dark:text-gray-400">ชื่อในระบบ</dt>
+                              <dd className="break-words">{p.displaySku ?? "—"}</dd>
+                              <dt className="text-gray-500 dark:text-gray-400">ช่องทาง</dt>
+                              <dd>{p.platforms.map((pl) => platformLabel[pl]).join(", ")}</dd>
+                              <dt className="text-gray-500 dark:text-gray-400">ขายไปแล้ว</dt>
+                              <dd className="tabular-nums">{p.totalQuantitySold.toLocaleString()} ชิ้น</dd>
+                              <dt className="text-gray-500 dark:text-gray-400">ราคา</dt>
+                              <dd className="tabular-nums">
+                                ล่าสุด ฿{p.lastPrice.toLocaleString()}
+                                {p.minPrice !== p.maxPrice && ` (฿${p.minPrice.toLocaleString()}–฿${p.maxPrice.toLocaleString()})`}
+                              </dd>
+                              <dt className="text-gray-500 dark:text-gray-400">ขายล่าสุด</dt>
+                              <dd>{new Date(p.lastSoldAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}</dd>
+                            </dl>
+                          </div>
+                        }
+                      >
+                        {p.productName}
+                      </HoverDetails>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
@@ -93,9 +121,9 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{p.totalQuantitySold.toLocaleString()} ชิ้น</td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{new Date(p.lastSoldAt).toLocaleDateString("th-TH")}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="whitespace-nowrap px-4 py-3 tabular-nums text-gray-600 dark:text-gray-400">{p.totalQuantitySold.toLocaleString()} ชิ้น</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-400">{new Date(p.lastSoldAt).toLocaleDateString("th-TH")}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
                       <Link href={`/products/${encodeURIComponent(p.sku)}`} className="text-sm font-medium text-indigo-600 hover:underline">
                         ดูประวัติราคา
                       </Link>
