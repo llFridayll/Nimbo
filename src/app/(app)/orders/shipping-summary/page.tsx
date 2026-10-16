@@ -252,6 +252,13 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
                                                 <Link href={`/orders/${orderId}`} className="text-primary hover:underline">
                                                   {mg.platformOrderIds[i]}
                                                 </Link>
+                                                {mg.expressOrderIds.includes(orderId) && (
+                                                  <div className="mt-0.5">
+                                                    <span className="inline-flex items-center rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-semibold text-white print:border print:border-black print:bg-transparent print:text-black">
+                                                      ส่งด่วน
+                                                    </span>
+                                                  </div>
+                                                )}
                                               </div>
                                             ))}
                                             {isMerged && (

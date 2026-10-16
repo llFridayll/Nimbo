@@ -105,6 +105,8 @@ export interface MergeGroup {
   trackingNumber: string | null;
   /** Any order in the group carried over from an earlier round. */
   carriedOver: boolean;
+  /** Orders in the group booked as express delivery. */
+  expressOrderIds: string[];
   lines: ShippingSummarySkuLine[];
 }
 
@@ -114,10 +116,11 @@ export function groupLinesForDisplay(lines: ShippingSummarySkuLine[]): MergeGrou
     const key = line.trackingNumber ? `trk:${line.trackingNumber}` : `order:${line.orderId}`;
     let group = map.get(key);
     if (!group) {
-      group = { orderIds: [], platformOrderIds: [], shop: line.shop, platform: line.platform, trackingNumber: line.trackingNumber, carriedOver: false, lines: [] };
+      group = { orderIds: [], platformOrderIds: [], shop: line.shop, platform: line.platform, trackingNumber: line.trackingNumber, carriedOver: false, expressOrderIds: [], lines: [] };
       map.set(key, group);
     }
     if (line.carriedOver) group.carriedOver = true;
+    if (line.isExpress && !group.expressOrderIds.includes(line.orderId)) group.expressOrderIds.push(line.orderId);
     if (!group.orderIds.includes(line.orderId)) {
       group.orderIds.push(line.orderId);
       group.platformOrderIds.push(line.platformOrderId);
