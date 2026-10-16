@@ -33,7 +33,19 @@ export interface ProductSummary {
  * `LIKE` (not `ILIKE`) keeps the previous `contains:` semantics exactly —
  * Prisma's `contains` without `mode: "insensitive"` is case-sensitive on
  * Postgres, and likewise does not escape % or _ in the search term. */
-export async function listProductSummaries({ q, platform }: { q?: string; platform?: Platform }): Promise<ProductSummary[]> {
+export type ProductSort = "quantity" | "recent";
+
+export async function listProductSummaries({
+  q,
+  platform,
+  sort = "quantity",
+}: {
+  q?: string;
+  platform?: Platform;
+  /** "quantity": best sellers first (the page's default). "recent": most
+   * recently sold first. */
+  sort?: ProductSort;
+}): Promise<ProductSummary[]> {
   const aliases = await getSkuAliasMap();
   // Searching for a name set on the packing list should find the platform
   // SKUs behind it too — that name is what staff now call the product.
@@ -93,7 +105,7 @@ export async function listProductSummaries({ q, platform }: { q?: string; platfo
            a."totalQuantitySold", a."minPrice", a."maxPrice", m."lastPrice", a."lastSoldAt"
     FROM aggregated a
     JOIN most_recent m ON m."sku" = a."sku"
-    ORDER BY a."lastSoldAt" DESC
+    ORDER BY ${sort === "recent" ? Prisma.sql`a."lastSoldAt" DESC` : Prisma.sql`a."totalQuantitySold" DESC, a."lastSoldAt" DESC`}
   `;
 
   return rows.map((row) => ({ ...row, displaySku: aliases.get(row.sku) ?? null, platforms: row.platforms as Platform[] }));
