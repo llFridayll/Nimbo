@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 
-const CARD_WIDTH = 384; // w-96
+const DEFAULT_WIDTH = 384;
 const GAP = 6;
 
 /** Shows `details` in a floating card while the pointer is over (or keyboard
@@ -14,10 +14,13 @@ export function HoverDetails({
   children,
   details,
   className,
+  width = DEFAULT_WIDTH,
 }: {
   children: React.ReactNode;
   details: React.ReactNode;
   className?: string;
+  /** Card width in px; kept inside the viewport either way. */
+  width?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
@@ -26,7 +29,7 @@ export function HoverDetails({
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - CARD_WIDTH - 8));
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
     // Open upward when the trigger is in the lower part of the screen, so the
     // card doesn't run off the bottom.
     setPos(r.bottom > window.innerHeight * 0.6 ? { left, bottom: window.innerHeight - r.top + GAP } : { left, top: r.bottom + GAP });
@@ -46,7 +49,7 @@ export function HoverDetails({
       {pos && (
         <div
           role="tooltip"
-          style={{ position: "fixed", left: pos.left, top: pos.top, bottom: pos.bottom, width: CARD_WIDTH }}
+          style={{ position: "fixed", left: pos.left, top: pos.top, bottom: pos.bottom, width }}
           className="pointer-events-none z-50 max-w-[calc(100vw-16px)] whitespace-normal rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700 shadow-xl dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
         >
           {details}
