@@ -11,6 +11,7 @@ import { SendLineSummaryButton } from "@/components/SendLineSummaryButton";
 import { ExportSummaryButton } from "@/components/ExportSummaryButton";
 import { ShippingChecklistCheckbox } from "@/components/ShippingChecklistCheckbox";
 import { SkuAliasEditor } from "@/components/SkuAliasEditor";
+import { HoverDetails } from "@/components/HoverDetails";
 
 export const dynamic = "force-dynamic";
 
@@ -271,6 +272,21 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
                                               // number joined by " / " (see lazadaImport.ts / tiktok.ts) —
                                               // one per line here instead of crammed onto one.
                                               mg.trackingNumber.split(" / ").map((code) => <div key={code}>{code}</div>)
+                                            ) : mg.expressOrderIds.length > 0 ? (
+                                              // Shopee's express riders (SHP Food) get a tracking number
+                                              // only once they collect the parcel; the label shows a
+                                              // pickup code instead, so a blank here isn't missing data.
+                                              <HoverDetails
+                                                width={280}
+                                                className="inline-block font-sans text-amber-700 underline decoration-dotted underline-offset-2 dark:text-amber-400"
+                                                details={
+                                                  <p className="font-sans leading-relaxed">
+                                                    ส่งด่วนแบบนี้ Shopee จะออกเลขพัสดุให้หลังเจ้าหน้าที่มารับของแล้ว เลขพัสดุจะขึ้นแทนข้อความนี้เมื่อนำเข้าไฟล์ Shopee รอบถัดไป
+                                                  </p>
+                                                }
+                                              >
+                                                รอเจ้าหน้าที่มารับ
+                                              </HoverDetails>
                                             ) : (
                                               "-"
                                             )}
