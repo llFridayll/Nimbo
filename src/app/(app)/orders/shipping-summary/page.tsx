@@ -2,7 +2,7 @@ import Link from "next/link";
 import { currentShippingCutoffWindow, shippingCutoffWindowForDate, formatBangkokDateYMD } from "@/lib/dateUtils";
 import { getShippingSummary } from "@/lib/shippingSummary";
 import { groupLinesForDisplay, aggregateGroupLines, type MergeGroup, type DisplaySkuRow } from "@/lib/shippingSummaryDisplay";
-import { getShippingChecklistOverrides, resolveShippingChecklistChecked, checklistKey } from "@/lib/shippingChecklist";
+import { getShippingChecklistOverrides, resolveShippingChecklistChecked, checklistKey, checklistSku } from "@/lib/shippingChecklist";
 import { getCurrentUser } from "@/lib/dal";
 import { platformLabel } from "@/lib/labels";
 import { PlatformLogo } from "@/components/PlatformLogo";
@@ -84,7 +84,7 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
       // group, not per individual line.
       const mergeGroups = groupLinesForDisplay(group.lines);
       const isGroupChecked = (mg: MergeGroup) =>
-        mg.lines.every((line) => resolveShippingChecklistChecked(checklistOverrides, checklistKey(line.orderId, line.sku), Boolean(line.trackingNumber) && !line.carriedOver));
+        mg.lines.every((line) => resolveShippingChecklistChecked(checklistOverrides, checklistKey(line.orderId, checklistSku(line)), Boolean(line.trackingNumber) && !line.carriedOver));
       const pendingGroups = mergeGroups.filter((mg) => !isGroupChecked(mg));
       const shippedGroups = mergeGroups.filter((mg) => isGroupChecked(mg));
       const countLines = (groups: MergeGroup[]) => groups.reduce((n, mg) => n + mg.lines.length, 0);
@@ -239,7 +239,7 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
                                 const zebra = groupIdx % 2 === 1 ? "bg-gray-50/60 dark:bg-gray-800/30" : "";
                                 const displayRows = aggregateGroupLines(mg.lines);
                                 const isRowChecked = (row: DisplaySkuRow) =>
-                                  row.sourceLines.every((line) => resolveShippingChecklistChecked(checklistOverrides, checklistKey(line.orderId, line.sku), Boolean(line.trackingNumber) && !line.carriedOver));
+                                  row.sourceLines.every((line) => resolveShippingChecklistChecked(checklistOverrides, checklistKey(line.orderId, checklistSku(line)), Boolean(line.trackingNumber) && !line.carriedOver));
                                 const isGroupChecked = displayRows.every(isRowChecked);
                                 const isMerged = mg.orderIds.length > 1;
                                 // Real sub-rows (one per aggregated SKU) with
@@ -257,7 +257,7 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
                                           <td className={`${TD_CLASS} text-center`} rowSpan={displayRows.length}>
                                             <ShippingChecklistCheckbox
                                               shipDate={shipDateStr}
-                                              items={mg.lines.map((l) => ({ orderId: l.orderId, sku: l.sku }))}
+                                              items={mg.lines.map((l) => ({ orderId: l.orderId, sku: checklistSku(l) }))}
                                               initialChecked={isGroupChecked}
                                             />
                                           </td>
