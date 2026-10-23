@@ -497,3 +497,72 @@ model Announcement {
 
   @@index([closedAt, createdAt])
 }
+
+enum StockMovementType {
+  /// Goods received into the warehouse (Excel import).
+  RECEIVE
+  /// Stock count: on-hand set to what was counted; quantity is the difference.
+  COUNT
+  /// Taken out when an order got its tracking number (see inventory.ts).
+  SALE
+  /// A SALE put back because the order was cancelled or returned.
+  SALE_REVERSAL
+}
+
+/// One physical thing on the warehouse shelf, counted in its smallest unit
+/// (แผ่น, ม้วน, ชิ้น). Platform SKUs point at it through SkuComponent, so a
+/// bag of 16 roof sheets and a single sheet both draw on the same stock.
+model InventoryItem {
+  id   String @id @default(cuid())
+  name String @unique
+  unit String @default("ชิ้น")
+
+  /// Kept in step with the movements inside the same transaction, so the
+  /// list page never has to sum the whole ledger.
+  onHand       Float  @default(0)
+  /// At or below this, the item shows as ใกล้หมด.
+  reorderPoint Float?
+  /// Cost of one unit, for the stock value figure.
+  unitCost     Float?
+
+  /// Orders labelled before this moment never deduct from this item: they
+  /// left the shelf before the first stock figure was entered, which
+  /// already doesn't include them.
+  trackingFrom DateTime @default(now())
+
+  components SkuComponent[]
+  movements  StockMovement[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+}
+
+/// "One of platform SKU X takes `quantity` of item Y off the shelf." A bundle
+/// SKU has several rows; a pack SKU has one row with quantity > 1.
+model SkuComponent {
+  id              String        @id @default(cuid())
+  rawSku          String
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  quantity        Float
+
+  @@unique([rawSku, inventoryItemId])
+  @@index([rawSku])
+}
+
+model StockMovement {
+  id              String            @id @default(cuid())
+  inventoryItemId String
+  inventoryItem   InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  type            StockMovementType
+  /// Signed: positive adds to the shelf, negative takes off it.
+  quantity        Float
+  balanceAfter    Float
+  orderId         String?
+  note            String?
+  fileName        String?
+  userId          String?
+  createdAt       DateTime          @default(now())
+
+  @@index([inventoryItemId, createdAt])
+  @@index([orderId])
+}

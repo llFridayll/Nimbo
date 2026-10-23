@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser, type CurrentUser } from "@/lib/dal";
 import { logActivity } from "@/lib/activityLog";
 import { statusLabel } from "@/lib/labels";
+import { reconcileOrderStock } from "@/lib/inventory";
 
 const ALL_STATUSES = new Set<string>(Object.values(OrderStatus));
 
@@ -34,6 +35,8 @@ async function applyOrderStatusChange(
         ? [prisma.problemTicket.update({ where: { id: order.problemId }, data: { isResolved: true, resolvedAt: new Date() } })]
         : []),
     ]);
+    // A manual cancel puts the stock back the same way a synced one does.
+    await reconcileOrderStock(order.id).catch((err) => console.error("[inventory] reconcile failed:", order.id, err));
   }
 
   await logActivity({

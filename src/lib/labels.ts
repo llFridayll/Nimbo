@@ -108,6 +108,8 @@ export const activityActionLabel: Record<ActivityAction, string> = {
   LINE_TARGET_RESET: "รีเซ็ตกลุ่ม LINE ปลายทาง",
   ANNOUNCEMENT_CREATE: "ลงประกาศแจ้งเตือน",
   ANNOUNCEMENT_CLOSE: "ปิดประกาศแจ้งเตือน",
+  INVENTORY_IMPORT: "นำเข้าไฟล์สต็อก",
+  INVENTORY_MAPPING_UPDATE: "ตั้งค่าการตัดสต็อกของสินค้า",
 };
 
 // Only two (package_status, package_sub_status) pairs have actually been

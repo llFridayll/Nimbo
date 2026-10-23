@@ -12,6 +12,7 @@ import { ExportSummaryButton } from "@/components/ExportSummaryButton";
 import { ShippingChecklistCheckbox } from "@/components/ShippingChecklistCheckbox";
 import { SkuAliasEditor } from "@/components/SkuAliasEditor";
 import { HoverDetails } from "@/components/HoverDetails";
+import { getTodayShortages } from "@/lib/inventory";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,10 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
   const summary = await getShippingSummary(window);
   const shipDateStr = formatBangkokDateYMD(window.shipDate);
   const checklistOverrides = await getShippingChecklistOverrides(shipDateStr);
+  // Only today's list can still run short; a past list already shipped.
+  const now = new Date();
+  // Stock figures are admin-only, like the stock pages themselves.
+  const shortages = canEditSku && now >= window.from && now < window.to ? await getTodayShortages(now) : [];
   // Saturday's ship date rolls in Sunday too, so stepping back a plain day
   // from Monday would land on Sunday (never a ship date) — skip it.
   const prevOffsetDays = window.dow === 1 ? 2 : 1;
@@ -163,6 +168,22 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
           {summary.unpaidExcludedCount > 0 && ` (ไม่รวม ${summary.unpaidExcludedCount} ออเดอร์ที่ยังไม่ชำระเงิน)`}
         </p>
       </div>
+
+      {shortages.length > 0 && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 print:hidden dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+          <p className="font-medium">ของในคลังไม่พอสำหรับใบนี้ {shortages.length} รายการ</p>
+          <ul className="mt-1 space-y-0.5 text-xs">
+            {shortages.map((s) => (
+              <li key={s.id}>
+                <Link href={`/inventory/${s.id}`} className="font-medium hover:underline">
+                  {s.name}
+                </Link>{" "}
+                — ต้องใช้ {s.neededToday.toLocaleString("th-TH")} เหลือ {Math.max(0, s.onHand).toLocaleString("th-TH")} {s.unit} (ขาด {s.shortToday.toLocaleString("th-TH")})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {summary.carriers.length === 0 ? (
         <p className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
