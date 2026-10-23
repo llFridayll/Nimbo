@@ -5,6 +5,9 @@
 //   - Lazada "confirmed" (buyer confirmed receipt) mapped to PENDING_SHIPMENT;
 //   - Lazada's updateTime / deliveredDate were never read, so printedAt fell
 //     back to the import time.
+//   - An order split into several packages kept only the first package's
+//     tracking number (fixed 2026-10-23), so the packing list showed it as
+//     one shipment.
 //
 // Statuses a person set by hand are never overwritten.
 //
@@ -45,7 +48,17 @@ async function main() {
       platform: { in: [Platform.SHOPEE, Platform.LAZADA] },
       ...(ONLY ? { platformOrderId: { in: [...ONLY] } } : {}),
     },
-    select: { id: true, platform: true, platformOrderId: true, shopName: true, status: true, printedAt: true, createdAt: true, rawPayload: true },
+    select: {
+      id: true,
+      platform: true,
+      platformOrderId: true,
+      shopName: true,
+      status: true,
+      printedAt: true,
+      createdAt: true,
+      rawPayload: true,
+      items: { select: { trackingNumber: true } },
+    },
   });
 
   // Orders whose status a person changed by hand (orderActions.ts writes this
@@ -81,7 +94,12 @@ async function main() {
     const replayed = printedAtFor(normalized, null, row.createdAt);
     const printedAt = replayed === undefined ? row.printedAt : replayed;
 
-    if (normalized.status !== row.status || printedAt?.getTime() !== row.printedAt?.getTime()) {
+    // Split into several packages but stored before items carried their own
+    // tracking number (2026-10-23): upsertOrder rewrites the items.
+    const splitUnstored =
+      new Set(normalized.items.map((it) => it.trackingNumber).filter(Boolean)).size > 1 && row.items.some((it) => !it.trackingNumber);
+
+    if (normalized.status !== row.status || printedAt?.getTime() !== row.printedAt?.getTime() || splitUnstored) {
       changes.push({
         id: row.id,
         platformOrderId: row.platformOrderId,
@@ -95,7 +113,10 @@ async function main() {
 
   const summary = new Map<string, number>();
   for (const c of changes) {
-    const key = `${c.platform} ${c.from.status} → ${c.to.status}${c.from.printedAt?.getTime() !== c.to.printedAt?.getTime() ? " (+printedAt)" : ""}`;
+    const key =
+      c.from.status === c.to.status && c.from.printedAt?.getTime() === c.to.printedAt?.getTime()
+        ? `${c.platform} แยกหลายพัสดุ (เติมเลขพัสดุรายชิ้น)`
+        : `${c.platform} ${c.from.status} → ${c.to.status}${c.from.printedAt?.getTime() !== c.to.printedAt?.getTime() ? " (+printedAt)" : ""}`;
     summary.set(key, (summary.get(key) ?? 0) + 1);
   }
   console.log(`ออเดอร์ Shopee/Lazada ${rows.length} — ต้องแก้ ${changes.length}`);

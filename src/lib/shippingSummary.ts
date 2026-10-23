@@ -210,7 +210,9 @@ export async function getShippingSummary(window: ShippingCutoffWindow): Promise<
         productName: item.productName,
         quantity: item.quantity,
         promoQuantity: isPromoOrder ? item.quantity : 0,
-        trackingNumber: order.trackingNumber,
+        // A split order's item carries its own package's number, so each
+        // package lands in its own shipment on the packing list.
+        trackingNumber: item.trackingNumber ?? order.trackingNumber,
         isRedundantTieWireFreebie: hasQualifyingTieWireSku && !isTieWireSkuItself && isPlatformProvidedTieWireFreebie(item.productName),
         carriedOver: order.printedAt !== null && order.printedAt < window.from,
         isExpress: EXPRESS_CARRIER.test(order.shippingCarrier ?? ""),

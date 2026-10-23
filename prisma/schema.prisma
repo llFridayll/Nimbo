@@ -197,6 +197,11 @@ model OrderItem {
   quantity    Int
   unitPrice   Float
   imageUrl    String?
+  /// Set only when the platform split the order into several packages, each
+  /// with its own tracking number (Shopee/Lazada exports carry one per row).
+  /// The packing list then shows one shipment per package instead of one
+  /// per order. Null means "same as the order's".
+  trackingNumber String?
 
   @@index([orderId])
   @@index([sku])

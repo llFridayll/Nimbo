@@ -66,6 +66,10 @@ export async function upsertOrder(order: NormalizedOrder) {
   const status =
     openTicket && order.status !== OrderStatus.REFUND_REQUESTED ? OrderStatus.PROBLEM : order.status;
 
+  // More than one tracking number across the items: the platform split the
+  // order into packages (see OrderItem.trackingNumber).
+  const isSplitShipment = new Set(order.items.map((it) => it.trackingNumber).filter(Boolean)).size > 1;
+
   const saved = await prisma.order.upsert({
     where: { platform_platformOrderId: { platform: order.platform, platformOrderId: order.platformOrderId } },
     create: {
@@ -97,6 +101,7 @@ export async function upsertOrder(order: NormalizedOrder) {
           quantity: it.quantity,
           unitPrice: it.unitPrice,
           imageUrl: it.imageUrl,
+          trackingNumber: isSplitShipment ? it.trackingNumber : null,
         })),
       },
       statusHistory: {
@@ -127,6 +132,25 @@ export async function upsertOrder(order: NormalizedOrder) {
       ...(order.cancelInitiator !== undefined ? { cancelInitiator: order.cancelInitiator } : {}),
       ...(order.cancelledAt !== undefined ? { cancelledAt: order.cancelledAt } : {}),
       rawPayload: order.rawPayload as never,
+      // Items are otherwise written once, at create. An order that has since
+      // been split into packages gets its items rewritten so each carries its
+      // own tracking number; nothing references OrderItem ids, so replacing
+      // them is safe.
+      ...(isSplitShipment
+        ? {
+            items: {
+              deleteMany: {},
+              create: order.items.map((it) => ({
+                sku: it.sku,
+                productName: it.productName,
+                quantity: it.quantity,
+                unitPrice: it.unitPrice,
+                imageUrl: it.imageUrl,
+                trackingNumber: it.trackingNumber ?? null,
+              })),
+            },
+          }
+        : {}),
     },
   });
 

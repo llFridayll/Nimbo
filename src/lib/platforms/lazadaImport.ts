@@ -172,26 +172,31 @@ export function parseLazadaExport(buffer: Buffer, shopName: string): LazadaImpor
     const buyerRegion = district || province ? [district, province].filter(Boolean).join(", ") : undefined;
 
     // Collapse repeated one-unit-per-row entries for the same SKU into a quantity.
-    const bySku = new Map<string, { productName: string; quantity: number; unitPrice: number }>();
+    // Keyed by SKU and package: units of one SKU split across packages stay
+    // separate, so the packing list can show each package on its own.
+    const bySku = new Map<string, { sku: string; productName: string; quantity: number; unitPrice: number; trackingNumber?: string }>();
     for (const row of itemRows) {
       const productNameRaw = cell(row, HEADER.ITEM_NAME);
       const sku = cell(row, HEADER.SELLER_SKU) || productNameRaw || "ไม่ระบุ SKU";
       const variation = cell(row, HEADER.VARIATION);
       const productName = variation ? `${productNameRaw} (${variation})` : productNameRaw;
       const unitPrice = Number(cell(row, HEADER.UNIT_PRICE)) || 0;
+      const trackingNumber = cell(row, HEADER.TRACKING_CODE) || undefined;
 
-      const existing = bySku.get(sku);
+      const key = `${sku}\u0000${trackingNumber ?? ""}`;
+      const existing = bySku.get(key);
       if (existing) {
         existing.quantity += 1;
       } else {
-        bySku.set(sku, { productName, quantity: 1, unitPrice });
+        bySku.set(key, { sku, productName, quantity: 1, unitPrice, trackingNumber });
       }
     }
-    const items: NormalizedOrderItem[] = Array.from(bySku.entries()).map(([sku, v]) => ({
-      sku,
+    const items: NormalizedOrderItem[] = Array.from(bySku.values()).map((v) => ({
+      sku: v.sku,
       productName: v.productName,
       quantity: v.quantity,
       unitPrice: v.unitPrice,
+      trackingNumber: v.trackingNumber,
     }));
 
     // No single grand-total column like Shopee's "จำนวนเงินทั้งหมด" — best

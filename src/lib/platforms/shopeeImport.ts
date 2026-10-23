@@ -159,8 +159,13 @@ export function parseShopeeExport(buffer: Buffer, shopName: string): ShopeeImpor
         productName: variant ? `${productName} (${variant})` : productName,
         quantity: Number(cell(row, HEADER.QUANTITY)) || 0,
         unitPrice: Number(cell(row, HEADER.UNIT_PRICE)) || 0,
+        trackingNumber: cell(row, HEADER.TRACKING_NUMBER) || undefined,
       };
     });
+    // Shopee splits a large order into several packages and gives each row
+    // its own tracking number. Reading only the first row's dropped the
+    // rest, so a three-package order showed on the packing list as one.
+    const trackingNumbers = Array.from(new Set(items.map((it) => it.trackingNumber).filter(Boolean)));
 
     const totalAmount = Number(cell(first, HEADER.GRAND_TOTAL)) || items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
 
@@ -182,7 +187,7 @@ export function parseShopeeExport(buffer: Buffer, shopName: string): ShopeeImpor
       currency: "THB",
       orderDate,
       shippingCarrier,
-      trackingNumber: cell(first, HEADER.TRACKING_NUMBER) || undefined,
+      trackingNumber: trackingNumbers.length > 0 ? trackingNumbers.join(" / ") : undefined,
       shopId: shopName,
       shopName,
       ...cancellation,

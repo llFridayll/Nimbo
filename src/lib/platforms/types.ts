@@ -8,6 +8,9 @@ export interface NormalizedOrderItem {
   quantity: number;
   unitPrice: number;
   imageUrl?: string;
+  /** This item's own package, when the order shipped as several — see
+   * OrderItem.trackingNumber. */
+  trackingNumber?: string;
 }
 
 export interface NormalizedOrder {
