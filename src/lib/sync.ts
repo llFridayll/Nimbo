@@ -4,6 +4,7 @@ import { adapters } from "./platforms";
 import { NormalizedOrder } from "./platforms/types";
 import { startOfDaysAgoBangkok } from "./dateUtils";
 import { printedAtFor } from "./printedAt";
+import { reconcileOrderStock } from "./inventory";
 
 const DELAYED_SHIPMENT_THRESHOLD_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
 
@@ -154,6 +155,10 @@ export async function upsertOrder(order: NormalizedOrder) {
       },
     });
   }
+
+  // Stock comes off the shelf when the tracking number arrives and goes back
+  // on a cancel; a failure here must not fail the order sync itself.
+  await reconcileOrderStock(saved.id).catch((err) => console.error("[inventory] reconcile failed:", saved.id, err));
 
   return saved;
 }

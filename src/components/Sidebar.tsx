@@ -14,6 +14,7 @@ import {
   PackageIcon,
   AlertTriangleIcon,
   MegaphoneIcon,
+  ArchiveIcon,
   TrendingUpIcon,
   UploadIcon,
   UsersIcon,
@@ -61,8 +62,10 @@ const ADMIN_SECTIONS: NavSection[] = [
   {
     sectionLabel: "ระบบ",
     items: [
+      { href: "/inventory", label: "คลังสินค้า", icon: ArchiveIcon },
       { href: "/admin/order-import", label: "นำเข้าออเดอร์ (Shopee/Lazada)", icon: UploadIcon },
       { href: "/admin/cancellation-import", label: "นำเข้ารายการยกเลิก / คืนสินค้า", icon: XCircleIcon },
+      { href: "/admin/inventory-import", label: "นำเข้าไฟล์สต็อก", icon: UploadIcon },
       { href: "/admin/employees", label: "จัดการพนักงาน", icon: UsersIcon },
       { href: "/admin/activity-log", label: "ประวัติการใช้งาน", icon: ClipboardListIcon },
     ],

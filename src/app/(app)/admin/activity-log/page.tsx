@@ -26,6 +26,8 @@ const ACTION_ACCENT: Record<ActivityAction, string> = {
   LINE_TARGET_RESET: "bg-red-500",
   ANNOUNCEMENT_CREATE: "bg-amber-500",
   ANNOUNCEMENT_CLOSE: "bg-emerald-500",
+  INVENTORY_IMPORT: "bg-orange-500",
+  INVENTORY_MAPPING_UPDATE: "bg-indigo-500",
 };
 
 export default async function ActivityLogPage() {

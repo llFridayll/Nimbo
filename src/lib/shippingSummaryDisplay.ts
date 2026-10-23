@@ -74,14 +74,17 @@ export function needsOwnFreebieTie(rawSku: string, productName: string, promoQua
   return FREEBIE_TIE_WIRE_PREFIXES.some((prefix) => rawSku.startsWith(prefix)) || promoQuantity > 0;
 }
 
-/** How many distinct real products (excluding standalone wire/tool rows —
+/** How many real product pieces (excluding standalone wire/tool rows —
  * see isWireOrToolProduct) go into one shipment (one order, or several
- * merged onto one tracking number). More than one means they all need tying
- * into a single box, reported once for the whole shipment via
- * buildGroupBundleNote — on top of, not instead of, any per-row
- * needsOwnFreebieTie note on the rows themselves. */
-export function countRealProductRows(rows: { productName: string; sourceLines: { rawSku: string }[] }[]): number {
-  return rows.filter((r) => !isWireOrToolProduct(r.sourceLines[0].rawSku, r.productName)).length;
+ * merged onto one tracking number). Counts quantity, not distinct SKUs, so
+ * two rolls of the same mesh under one label need tying too. More than one
+ * means they all need tying into a single bundle, reported once for the
+ * whole shipment via buildGroupBundleNote — on top of, not instead of, any
+ * per-row needsOwnFreebieTie note on the rows themselves. */
+export function countRealProductRows(rows: { productName: string; quantity: number; sourceLines: { rawSku: string }[] }[]): number {
+  return rows
+    .filter((r) => !isWireOrToolProduct(r.sourceLines[0].rawSku, r.productName))
+    .reduce((sum, r) => sum + r.quantity, 0);
 }
 
 /** The shipment-level note text, e.g. "(มัดรวมกัน 3 ชิ้น)" — only meaningful
