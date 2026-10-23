@@ -251,7 +251,7 @@ export default async function ShippingSummaryPage({ searchParams }: ShippingSumm
                                 return displayRows.map((row, rowIdx) => {
                                   const isChecked = isRowChecked(row);
                                   return (
-                                    <tr key={`${mg.orderIds.join("+")} ${row.sku}`} className={`border-gray-100 dark:border-gray-800 ${zebra} ${rowIdx === displayRows.length - 1 ? "border-b" : ""}`}>
+                                    <tr key={`${mg.orderIds.join("+")} ${mg.trackingNumber ?? ""} ${row.sku}`} className={`border-gray-100 dark:border-gray-800 ${zebra} ${rowIdx === displayRows.length - 1 ? "border-b" : ""}`}>
                                       {rowIdx === 0 && (
                                         <>
                                           <td className={`${TD_CLASS} text-center`} rowSpan={displayRows.length}>
