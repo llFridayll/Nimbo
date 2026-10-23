@@ -27,4 +27,11 @@ export function resolveShippingChecklistChecked(overrides: Map<string, boolean>,
   return override === undefined ? hasTrackingNumber : override;
 }
 
+/** The `sku` a checklist row is stored under. A package of a split order
+ * adds its tracking number, so each package is ticked on its own; every
+ * other line keeps the plain SKU, leaving existing ticks untouched. */
+export function checklistSku(line: { sku: string; packageTrackingNumber: string | null }): string {
+  return line.packageTrackingNumber ? `${line.sku} #${line.packageTrackingNumber}` : line.sku;
+}
+
 export { checklistKey };

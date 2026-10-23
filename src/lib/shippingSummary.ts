@@ -70,6 +70,10 @@ export interface ShippingSummarySkuLine {
    * 08:30-16:30 twist-tie-tool promo window (see isMondayPromoWindow). */
   promoQuantity: number;
   trackingNumber: string | null;
+  /** This line's own package, set only when the platform split the order
+   * into several (OrderItem.trackingNumber). Each package then gets its own
+   * checkbox, since they can go out separately. */
+  packageTrackingNumber: string | null;
   /** True when this line is a platform-provided "แถมลวดมัด" freebie item
    * that duplicates the auto-added tie-wire note already on a sibling SS/HJ
    * line in the same order (see shippingSummaryDisplay.ts). Left in for the
@@ -213,6 +217,7 @@ export async function getShippingSummary(window: ShippingCutoffWindow): Promise<
         // A split order's item carries its own package's number, so each
         // package lands in its own shipment on the packing list.
         trackingNumber: item.trackingNumber ?? order.trackingNumber,
+        packageTrackingNumber: item.trackingNumber,
         isRedundantTieWireFreebie: hasQualifyingTieWireSku && !isTieWireSkuItself && isPlatformProvidedTieWireFreebie(item.productName),
         carriedOver: order.printedAt !== null && order.printedAt < window.from,
         isExpress: EXPRESS_CARRIER.test(order.shippingCarrier ?? ""),
