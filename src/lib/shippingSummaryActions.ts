@@ -7,10 +7,21 @@ import { pushLineMessage, buildShippingSummaryLineMessages } from "@/lib/line";
 import { previewShippingSummarySlip as buildSlipPreview, type SlipPreviewCarrier } from "@/lib/shippingSummaryExcel";
 import { getCurrentUser } from "@/lib/dal";
 import { logActivity } from "@/lib/activityLog";
+import { getLineSendLog, recordLineSend, orderCarriers } from "@/lib/lineSendLog";
 
 export interface SendLineSummaryState {
   success?: boolean;
   error?: string;
+}
+
+/** "all": every item on the day's list. "new": only items not sent to LINE
+ * earlier for the same ship date (see lineSendLog.ts). */
+export type LineSendMode = "all" | "new";
+
+export interface LineSendInfo {
+  /** Item keys (ShippingPreviewItem.key) already sent for this ship date. */
+  sentKeys: string[];
+  lastSentAt: string | null;
 }
 
 export interface ShippingPreviewItem {
@@ -49,7 +60,7 @@ export async function getShippingSummaryPreviewItems(dateStr: string): Promise<S
   for (const group of summary.carriers) {
     for (const line of filterRedundantTieWireFreebies(group.lines)) {
       items.push({
-        key: shippingLineItemKey(line.orderId, line.rawSku),
+        key: shippingLineItemKey(line),
         carrier: group.carrier,
         shop: line.shop,
         platformOrderId: line.platformOrderId,
@@ -62,15 +73,49 @@ export async function getShippingSummaryPreviewItems(dateStr: string): Promise<S
   return items;
 }
 
+/** What has already gone to LINE for this ship date — the send dialog uses
+ * it to offer "เฉพาะรายการใหม่" and to list only the new items. */
+export async function getLineSendInfo(dateStr: string): Promise<LineSendInfo> {
+  await getCurrentUser();
+  const log = await getLineSendLog(resolveWindow(dateStr).shipDate);
+  return { sentKeys: log.keys, lastSentAt: log.lastSentAt };
+}
+
+/** The one place a LINE send is assembled, for the preview and the real
+ * send alike. Already-sent items are dropped server-side for "new", so the
+ * result never depends on what the browser thinks was sent. */
+async function buildLineSend(dateStr: string, excludedKeys: string[], mode: LineSendMode) {
+  const window = resolveWindow(dateStr);
+  const [summary, log] = await Promise.all([getShippingSummary(window), getLineSendLog(window.shipDate)]);
+
+  // Pile numbers: couriers already numbered today keep theirs; any courier
+  // new today is numbered after them, busiest first.
+  const kongNumbers = new Map(log.carriers.map((c, i) => [c, i + 1]));
+  const allPiles = orderCarriers(summary.carriers, log.carriers);
+  for (const g of allPiles) if (!kongNumbers.has(g.carrier)) kongNumbers.set(g.carrier, kongNumbers.size + 1);
+
+  const skip = new Set(excludedKeys);
+  if (mode === "new") for (const k of log.keys) skip.add(k);
+  const carriers = orderCarriers(excludeShippingSummaryLines(summary.carriers, skip), log.carriers);
+  const messages = buildShippingSummaryLineMessages(
+    { window, totalOrders: 0, carriers, unpaidExcludedCount: 0 },
+    { kongNumbers, newOnly: mode === "new" },
+  );
+  return { window, carriers, messages, pileOrder: [...kongNumbers.entries()].sort((a, b) => a[1] - b[1]).map(([c]) => c) };
+}
+
+function parseMode(value: unknown): LineSendMode {
+  return value === "new" ? "new" : "all";
+}
+
 /** Builds the exact LINE message texts a real send would push, without
  * actually pushing them — lets staff review the content (SKUs, bundling
  * notes, carrier grouping) before committing, since this data ultimately
  * comes from platform sync/import and isn't always right. `excludedKeys`
  * (see ShippingPreviewItem.key) drops items a customer cancelled. */
-export async function previewShippingSummaryLineMessages(dateStr: string, excludedKeys: string[] = []): Promise<string[]> {
+export async function previewShippingSummaryLineMessages(dateStr: string, excludedKeys: string[] = [], mode: LineSendMode = "all"): Promise<string[]> {
   await getCurrentUser();
-  const carriers = await getFilteredCarriers(dateStr, excludedKeys);
-  return buildShippingSummaryLineMessages({ window: resolveWindow(dateStr), totalOrders: 0, carriers, unpaidExcludedCount: 0 });
+  return (await buildLineSend(dateStr, excludedKeys, parseMode(mode))).messages;
 }
 
 /** Preview of the Excel packing-slip content (tracking numbers + product
@@ -87,17 +132,22 @@ export async function sendShippingSummaryToLine(_prevState: SendLineSummaryState
   const user = await getCurrentUser();
   const dateStr = String(formData.get("date") ?? "");
   const excludedKeys = JSON.parse(String(formData.get("excludedKeys") ?? "[]")) as string[];
-  const carriers = await getFilteredCarriers(dateStr, excludedKeys);
-  const messages = buildShippingSummaryLineMessages({ window: resolveWindow(dateStr), totalOrders: 0, carriers, unpaidExcludedCount: 0 });
+  const mode = parseMode(formData.get("mode"));
+  const { window, carriers, messages, pileOrder } = await buildLineSend(dateStr, excludedKeys, mode);
+  if (mode === "new" && carriers.length === 0) return { success: false, error: "ไม่มีรายการใหม่ตั้งแต่ส่งครั้งก่อน" };
+
   const result = await pushLineMessage(messages);
 
   if (!result.ok) return { success: false, error: result.error };
+
+  const sentKeys = carriers.flatMap((g) => g.lines.map((line) => shippingLineItemKey(line)));
+  await recordLineSend(window.shipDate, sentKeys, pileOrder);
 
   await logActivity({
     userId: user.id,
     username: user.username,
     action: "LINE_SUMMARY_SENT",
-    detail: `สรุปออเดอร์จัดส่งวันที่ ${dateStr || "วันนี้"}${excludedKeys.length > 0 ? ` (ตัดออก ${excludedKeys.length} รายการ)` : ""}`,
+    detail: `สรุปออเดอร์จัดส่งวันที่ ${dateStr || "วันนี้"} (${mode === "new" ? `เฉพาะรายการใหม่ ${sentKeys.length} รายการ` : "ทั้งหมด"})${excludedKeys.length > 0 ? ` (ตัดออก ${excludedKeys.length} รายการ)` : ""}`,
   });
 
   return { success: true };
