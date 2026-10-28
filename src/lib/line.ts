@@ -76,9 +76,19 @@ function buildOrderGroupsText(lines: ShippingSummarySkuLine[]): string[] {
 /** The first message posted for a carrier on a given day — "กองที่ N
  * {carrier} (dd/mm/yy)" followed by one block per order (see
  * buildOrderGroupsText) for every order reported so far. */
-export function buildCarrierBaselineMessage(kongNumber: number, carrier: string, dateLabel: string, lines: ShippingSummarySkuLine[]): string {
-  const out = [`กองที่ ${kongNumber} ${carrier} (${dateLabel})`, ...buildOrderGroupsText(lines)];
+export function buildCarrierBaselineMessage(kongNumber: number, carrier: string, dateLabel: string, lines: ShippingSummarySkuLine[], newOnly = false): string {
+  const out = [`กองที่ ${kongNumber} ${carrier} (${dateLabel})${newOnly ? " — รายการใหม่" : ""}`, ...buildOrderGroupsText(lines)];
   return out.join("\n");
+}
+
+export interface LineMessageOptions {
+  /** Pile number per courier, fixed by the day's first send (see
+   * lineSendLog.ts). Couriers missing from it are numbered after it, in the
+   * order `summary.carriers` lists them. */
+  kongNumbers?: Map<string, number>;
+  /** Only items not sent earlier today: each pile is headed "รายการใหม่",
+   * and an empty result says so instead of "no orders". */
+  newOnly?: boolean;
 }
 
 /** One LINE message per carrier — this is the whole LINE path now: staff
@@ -89,16 +99,25 @@ export function buildCarrierBaselineMessage(kongNumber: number, carrier: string,
  * 12:45 and sent only the delta since its last post, quote-replying to each
  * carrier's first message of the day. It was switched off by request and the
  * code removed on 2026-09-30 — sending on demand is what staff actually use,
- * and a full resend needs none of that per-carrier quote-token bookkeeping. */
-export function buildShippingSummaryLineMessages(summary: ShippingSummaryResult): string[] {
+ * and a full resend needs none of that per-carrier quote-token bookkeeping.
+ *
+ * Since 2026-10-23 a send can also carry only what was added since the
+ * day's earlier sends (`options.newOnly`); the caller drops the already-sent
+ * lines before calling. */
+export function buildShippingSummaryLineMessages(summary: ShippingSummaryResult, options: LineMessageOptions = {}): string[] {
   const dateLabel = shippingSummaryDateLabel(summary.window.shipDate);
 
   if (summary.carriers.length === 0) {
-    return applyDashFrame([`ไม่มีออเดอร์จัดส่งสำหรับวันที่ (${dateLabel})`]);
+    return applyDashFrame([options.newOnly ? `ไม่มีรายการใหม่สำหรับวันที่ (${dateLabel})` : `ไม่มีออเดอร์จัดส่งสำหรับวันที่ (${dateLabel})`]);
   }
 
+  const numbers = new Map(options.kongNumbers);
+  for (const group of summary.carriers) if (!numbers.has(group.carrier)) numbers.set(group.carrier, numbers.size + 1);
+
   return applyDashFrame(
-    summary.carriers.map((group, idx) => buildCarrierBaselineMessage(idx + 1, group.carrier, dateLabel, filterRedundantTieWireFreebies(group.lines)))
+    summary.carriers.map((group) =>
+      buildCarrierBaselineMessage(numbers.get(group.carrier)!, group.carrier, dateLabel, filterRedundantTieWireFreebies(group.lines), options.newOnly)
+    )
   );
 }
 

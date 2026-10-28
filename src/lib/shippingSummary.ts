@@ -244,9 +244,11 @@ export async function getShippingSummary(window: ShippingCutoffWindow): Promise<
  * on the LINE/Excel preview screens (a customer cancelling just one item in
  * an otherwise-still-shipping order) — keyed off the untouched platform SKU
  * (rawSku), not the display sku, so a SkuAlias rename never changes what a
- * previously-picked exclusion matches. */
-export function shippingLineItemKey(orderId: string, rawSku: string): string {
-  return `${orderId}|${rawSku}`;
+ * previously-picked exclusion matches. A package of a split order adds its
+ * tracking number, so one package can be dropped without the others. */
+export function shippingLineItemKey(line: Pick<ShippingSummarySkuLine, "orderId" | "rawSku" | "packageTrackingNumber">): string {
+  const key = `${line.orderId}|${line.rawSku}`;
+  return line.packageTrackingNumber ? `${key}|${line.packageTrackingNumber}` : key;
 }
 
 /** Drops excluded lines from every carrier (see shippingLineItemKey) and
@@ -261,7 +263,7 @@ export function excludeShippingSummaryLines(
   if (excludedKeys.size === 0) return carriers;
   return carriers
     .map((group) => {
-      const lines = group.lines.filter((line) => !excludedKeys.has(shippingLineItemKey(line.orderId, line.rawSku)));
+      const lines = group.lines.filter((line) => !excludedKeys.has(shippingLineItemKey(line)));
       return { carrier: group.carrier, orderCount: new Set(lines.map((l) => l.orderId)).size, totalItems: lines.reduce((n, l) => n + l.quantity, 0), lines };
     })
     .filter((group) => group.lines.length > 0);
